@@ -3,14 +3,14 @@ from __future__ import annotations
 import calendar
 import re
 import unicodedata
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from dateutil import parser as date_parser
 
 from civic_metrics.domain import Period
-
 
 SPANISH_MONTHS = {
     "enero": 1,
@@ -40,6 +40,7 @@ SPANISH_MONTHS = {
     "nov": 11,
     "dic": 12,
 }
+SPAIN_TIMEZONE = ZoneInfo("Europe/Madrid")
 
 
 def normalise_text(value: Any) -> str:
@@ -78,8 +79,13 @@ def parse_decimal(value: Any) -> Decimal:
         raise ValueError(f"Cannot parse numeric value from {value!r}") from exc
 
 
-def period_from_datetime(value: datetime, frequency: str) -> Period:
-    value = value.astimezone(timezone.utc).date()
+def period_from_datetime(
+    value: datetime,
+    frequency: str,
+    *,
+    calendar_timezone: tzinfo = UTC,
+) -> Period:
+    value = value.astimezone(calendar_timezone).date()
     if frequency == "monthly":
         start = value.replace(day=1)
         end = value.replace(day=calendar.monthrange(value.year, value.month)[1])
@@ -103,7 +109,7 @@ def period_from_label(label: str, default_frequency: str) -> Period:
     if compact_month and default_frequency == "monthly":
         year = int(compact_month.group(1))
         month = int(compact_month.group(2))
-        return period_from_datetime(datetime(year, month, 1, tzinfo=timezone.utc), "monthly")
+        return period_from_datetime(datetime(year, month, 1, tzinfo=UTC), "monthly")
 
     # Common Spanish quarterly labels: 2T 2026, T2 2026, 2026T2, Q2 2026.
     quarter_patterns = (
@@ -120,7 +126,7 @@ def period_from_label(label: str, default_frequency: str) -> Period:
         else:
             year, quarter = int(match.group(1)), int(match.group(2))
         month = (quarter - 1) * 3 + 1
-        return period_from_datetime(datetime(year, month, 1, tzinfo=timezone.utc), "quarterly")
+        return period_from_datetime(datetime(year, month, 1, tzinfo=UTC), "quarterly")
 
     year_match = re.search(r"\b(?:19|20)\d{2}\b", text)
     month_number: int | None = None
@@ -130,12 +136,12 @@ def period_from_label(label: str, default_frequency: str) -> Period:
             break
     if year_match and month_number:
         return period_from_datetime(
-            datetime(int(year_match.group(0)), month_number, 1, tzinfo=timezone.utc),
+            datetime(int(year_match.group(0)), month_number, 1, tzinfo=UTC),
             "monthly",
         )
     if year_match and default_frequency == "annual":
         return period_from_datetime(
-            datetime(int(year_match.group(0)), 1, 1, tzinfo=timezone.utc),
+            datetime(int(year_match.group(0)), 1, 1, tzinfo=UTC),
             "annual",
         )
 
@@ -145,7 +151,7 @@ def period_from_label(label: str, default_frequency: str) -> Period:
     try:
         parsed = date_parser.parse(label, dayfirst=True, fuzzy=True)
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
         return period_from_datetime(parsed, default_frequency)
     except (ValueError, OverflowError) as exc:
         raise ValueError(f"Could not parse period label {label!r}") from exc
@@ -155,17 +161,29 @@ def period_from_ine_date(value: Any, frequency: str, year: int | None = None) ->
     if isinstance(value, (int, float)):
         milliseconds = float(value)
         if milliseconds > 10_000_000_000:
-            parsed = datetime.fromtimestamp(milliseconds / 1000, tz=timezone.utc)
+            parsed = datetime.fromtimestamp(milliseconds / 1000, tz=SPAIN_TIMEZONE)
         else:
-            parsed = datetime.fromtimestamp(milliseconds, tz=timezone.utc)
-        return period_from_datetime(parsed, frequency)
+            parsed = datetime.fromtimestamp(milliseconds, tz=SPAIN_TIMEZONE)
+        return period_from_datetime(
+            parsed,
+            frequency,
+            calendar_timezone=SPAIN_TIMEZONE,
+        )
     if value:
         parsed = date_parser.parse(str(value))
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return period_from_datetime(parsed, frequency)
+            parsed = parsed.replace(tzinfo=SPAIN_TIMEZONE)
+        return period_from_datetime(
+            parsed,
+            frequency,
+            calendar_timezone=SPAIN_TIMEZONE,
+        )
     if year:
-        return period_from_datetime(datetime(year, 1, 1, tzinfo=timezone.utc), frequency)
+        return period_from_datetime(
+            datetime(year, 1, 1, tzinfo=SPAIN_TIMEZONE),
+            frequency,
+            calendar_timezone=SPAIN_TIMEZONE,
+        )
     raise ValueError("INE observation does not contain a usable date")
 
 
@@ -173,15 +191,15 @@ def prior_period(period: Period) -> Period:
     if period.frequency == "monthly":
         end_previous = period.start - timedelta(days=1)
         return period_from_datetime(
-            datetime(end_previous.year, end_previous.month, 1, tzinfo=timezone.utc),
+            datetime(end_previous.year, end_previous.month, 1, tzinfo=UTC),
             "monthly",
         )
     if period.frequency == "quarterly":
         end_previous = period.start - timedelta(days=1)
         return period_from_datetime(
-            datetime(end_previous.year, end_previous.month, 1, tzinfo=timezone.utc),
+            datetime(end_previous.year, end_previous.month, 1, tzinfo=UTC),
             "quarterly",
         )
     return period_from_datetime(
-        datetime(period.start.year - 1, 1, 1, tzinfo=timezone.utc), "annual"
+        datetime(period.start.year - 1, 1, 1, tzinfo=UTC), "annual"
     )

@@ -221,7 +221,7 @@ class PipelineOrchestrator:
                 genai_validation = validation.to_dict()
                 if validation.status == "failed" and self.settings.genai_validation_strict:
                     status = "partial"
-                    error = validation.summary or "GenAI validation found a mismatch"
+                    error = validation.description or "GenAI validation found a mismatch"
                 if validation.status == "error":
                     LOGGER.warning(
                         "GenAI validation failed for dataset %s: %s",
