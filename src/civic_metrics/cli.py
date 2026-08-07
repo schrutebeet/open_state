@@ -47,7 +47,8 @@ def run_pipeline(
     project_root: Path | None = None,
 ) -> int:
     args = build_parser().parse_args(argv)
-    settings = Settings(project_root=(project_root or Path.cwd()).resolve())
+    root = (project_root or Path.cwd()).resolve()
+    settings = Settings(project_root=root, _env_file=root / ".env")
     configure_logging(settings.log_level)
 
     lock_path = settings.project_root / "data" / "pipeline.lock"
@@ -99,7 +100,7 @@ def _print_summary(summary: dict[str, object]) -> None:
             print(
                 "             GenAI validation: "
                 f"{validation.get('status')} - "
-                f"{validation.get('summary') or validation.get('error') or ''}"
+                f"{validation.get('description') or validation.get('error') or ''}"
             )
     print(
         "  Derived: "
