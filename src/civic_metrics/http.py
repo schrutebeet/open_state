@@ -4,7 +4,8 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 from typing import Any
 
 import httpx
@@ -139,7 +140,7 @@ class HttpClient:
         return DatasetPayload(
             dataset_code=dataset_code,
             source_code=source_code,
-            fetched_at=datetime.now(timezone.utc),
+            fetched_at=datetime.now(UTC).astimezone(ZoneInfo("Europe/Madrid")),
             source_url=response.source_url,
             content_type=response.content_type,
             body=response.body,
