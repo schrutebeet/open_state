@@ -68,7 +68,7 @@ relational database. The schema and queries use portable SQLAlchemy 2 constructs
 so PostgreSQL can be selected by changing one setting:
 
 ```bash
-export CIVIC_METRICS_DATABASE_URL='postgresql+psycopg://user:password@host:5432/civic_metrics'
+export DATABASE_URL='postgresql+psycopg://user:password@host:5432/civic_metrics'
 ```
 
 Install the PostgreSQL driver with:
@@ -142,8 +142,8 @@ The connector resolves secrets in this order:
 Environment-variable alternative:
 
 ```bash
-export CIVIC_METRICS_DATACOMEX_USERNAME='...'
-export CIVIC_METRICS_DATACOMEX_PASSWORD='...'
+export DATACOMEX_USERNAME='...'
+export DATACOMEX_PASSWORD='...'
 ```
 
 On a server, inject these values through the hosting provider's secrets manager,
@@ -163,20 +163,20 @@ Set the API key outside the repository and enable validation:
 
 ```bash
 export OPENAI_API_KEY='...'
-export CIVIC_METRICS_GENAI_VALIDATION_ENABLED=true
+export GENAI_VALIDATION_ENABLED=true
 ```
 
-The default model is `gpt-4o-mini`. Validation is advisory: its structured report
+The default model is `gpt-5.6-luna`. Validation is advisory: its structured report
 appears under each dataset's `genai_validation` field in `--json` output, while API
 errors do not stop ingestion. To mark an otherwise successful dataset as `partial`
 when the model finds a mismatch, also set:
 
 ```bash
-export CIVIC_METRICS_GENAI_VALIDATION_STRICT=true
+export GENAI_VALIDATION_STRICT=true
 ```
 
 Payload text sent to the API is capped at 60,000 characters by default. Override
-this with `CIVIC_METRICS_GENAI_VALIDATION_MAX_PAYLOAD_CHARS`. Because this sends
+this with `GENAI_VALIDATION_MAX_PAYLOAD_CHARS`. Because this sends
 source data to OpenAI and model judgments are probabilistic, keep deterministic
 schema and range checks as the authoritative validation layer.
 

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Iterable
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
@@ -77,7 +76,7 @@ class PipelineOrchestrator:
 
     def run(self, selected_datasets: Iterable[str] | None = None) -> PipelineResult:
         selected = set(selected_datasets or [])
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
         with self.session_factory() as session:
             sync_catalog(session, self.catalog)
             run = IngestionRun(started_at=started_at, status="running", summary_json={})
@@ -126,7 +125,7 @@ class PipelineOrchestrator:
             status = "failed"
         else:
             status = "partial"
-        finished_at = datetime.now(timezone.utc)
+        finished_at = datetime.now(UTC)
         pipeline_result = PipelineResult(
             run_id=run_id,
             status=status,
@@ -213,6 +212,11 @@ class PipelineOrchestrator:
                 validation = GenAIDataValidator(
                     model=self.settings.genai_validation_model,
                     max_payload_chars=self.settings.genai_validation_max_payload_chars,
+                    api_key=(
+                        self.settings.openai_api_key.get_secret_value()
+                        if self.settings.openai_api_key is not None
+                        else None
+                    ),
                 ).validate(definition, indicators, payload, candidates)
                 genai_validation = validation.to_dict()
                 if validation.status == "failed" and self.settings.genai_validation_strict:

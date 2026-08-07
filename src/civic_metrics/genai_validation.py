@@ -30,9 +30,16 @@ class GenAIValidationResult:
 class GenAIDataValidator:
     """Use an LLM as an advisory semantic check of extraction results."""
 
-    def __init__(self, *, model: str, max_payload_chars: int) -> None:
+    def __init__(
+        self,
+        *,
+        model: str,
+        max_payload_chars: int,
+        api_key: str | None = None,
+    ) -> None:
         self.model = model
         self.max_payload_chars = max_payload_chars
+        self.api_key = api_key
 
     def validate(
         self,
@@ -62,7 +69,7 @@ class GenAIDataValidator:
                 "source_payload_rendering": evidence,
                 "source_payload_truncated": truncated,
             }
-            response = OpenAI().responses.create(
+            response = OpenAI(api_key=self.api_key).responses.create(
                 model=self.model,
                 instructions=(
                     "You validate a public-data ingestion result. Compare every written result "

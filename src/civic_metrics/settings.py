@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Runtime configuration.
 
-    Secrets are intentionally not read from committed files. Pydantic reads OS
-    environment variables; the DataComex connector also supports the OS keyring.
+    Secrets are intentionally not read from committed files. Pydantic reads the
+    project `.env` file and OS environment variables; the DataComex connector
+    also supports the OS keyring.
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="CIVIC_METRICS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
@@ -28,10 +29,11 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 45.0
     max_history_periods: int = 12
     fail_fast: bool = False
-    genai_validation_enabled: bool = os.environ.get("CIVIC_METRICS_GENAI_VALIDATION_ENABLED", "false").lower() == "true"
+    genai_validation_enabled: bool = False
     genai_validation_model: str = "gpt-5.6-luna"
     genai_validation_max_payload_chars: int = 100_000
-    genai_validation_strict: bool = os.environ.get("CIVIC_METRICS_GENAI_VALIDATION_STRICT", "false").lower() == "true"
+    genai_validation_strict: bool = False
+    openai_api_key: SecretStr | None = Field(default=None, repr=False)
     datacomex_username: str | None = None
     datacomex_password: str | None = None
 
