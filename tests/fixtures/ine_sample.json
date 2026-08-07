@@ -1,0 +1,17 @@
+[
+  {
+    "COD": "GDP_NOMINAL_SAMPLE",
+    "Nombre": "Producto interior bruto a precios de mercado. Millones de euros",
+    "Data": [
+      {"Fecha": "2025-01-01T00:00:00+00:00", "Valor": 400000},
+      {"Fecha": "2025-04-01T00:00:00+00:00", "Valor": 410000}
+    ]
+  },
+  {
+    "COD": "HOUSEHOLDS_SAMPLE",
+    "Nombre": "Gasto en consumo final de los hogares. Millones de euros",
+    "Data": [
+      {"Fecha": "2025-04-01T00:00:00+00:00", "Valor": 220000}
+    ]
+  }
+]

@@ -1,0 +1,732 @@
+indicators:
+- code: gdp_nominal
+  name: Nominal GDP
+  description: Gross domestic product at market prices, current prices.
+  category: economy
+  subcategory: national_accounts
+  dataset: ine_gdp_current_prices
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Producto interior bruto a precios de mercado
+    exclude:
+    - Variación
+    - Aportación
+- code: gdp_real_qoq
+  name: Real GDP quarterly growth
+  description: Quarter-on-quarter change in chain-linked volume GDP.
+  category: economy
+  subcategory: national_accounts
+  dataset: ine_gdp_volume
+  unit: percent
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Producto interior bruto a precios de mercado
+    - Variación trimestral
+    - Índices de volumen encadenados
+    prefer:
+    - Datos ajustados de estacionalidad y calendario
+- code: gdp_real_yoy
+  name: Real GDP annual growth
+  description: Year-on-year change in chain-linked volume GDP.
+  category: economy
+  subcategory: national_accounts
+  dataset: ine_gdp_volume
+  unit: percent
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Producto interior bruto a precios de mercado
+    - Variación anual
+    - Índices de volumen encadenados
+    prefer:
+    - Datos ajustados de estacionalidad y calendario
+- code: household_consumption_nominal
+  name: Household final consumption
+  description: Household final consumption expenditure at current prices.
+  category: economy
+  subcategory: national_accounts
+  dataset: ine_gdp_current_prices
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Gasto en consumo final de los hogares
+    exclude:
+    - Variación
+    - Aportación
+- code: gross_fixed_capital_formation_nominal
+  name: Gross fixed capital formation
+  description: Gross fixed capital formation at current prices.
+  category: economy
+  subcategory: national_accounts
+  dataset: ine_gdp_current_prices
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Formación bruta de capital fijo
+    exclude:
+    - Variación
+    - Aportación
+- code: national_accounts_exports_nominal
+  name: Exports of goods and services
+  description: Exports of goods and services in national accounts, current prices.
+  category: economy
+  subcategory: national_accounts
+  dataset: ine_gdp_current_prices
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Exportaciones de bienes y servicios
+    exclude:
+    - Variación
+    - Aportación
+- code: national_accounts_imports_nominal
+  name: Imports of goods and services
+  description: Imports of goods and services in national accounts, current prices.
+  category: economy
+  subcategory: national_accounts
+  dataset: ine_gdp_current_prices
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Importaciones de bienes y servicios
+    exclude:
+    - Variación
+    - Aportación
+- code: cpi_yoy
+  name: Headline inflation
+  description: Annual change in the national consumer price index.
+  category: economy
+  subcategory: prices
+  dataset: ine_cpi_general
+  unit: percent
+  frequency: monthly
+  extraction:
+    kind: ine_series
+    include:
+    - Índice general
+    - Variación anual
+    exclude:
+    - Alimentos
+    - Energía
+    - Subyacente
+- code: cpi_mom
+  name: Monthly inflation
+  description: Monthly change in the national consumer price index.
+  category: economy
+  subcategory: prices
+  dataset: ine_cpi_general
+  unit: percent
+  frequency: monthly
+  extraction:
+    kind: ine_series
+    include:
+    - Índice general
+    - Variación mensual
+    exclude:
+    - Alimentos
+    - Energía
+    - Subyacente
+- code: core_cpi_yoy
+  name: Core inflation
+  description: Annual CPI change excluding unprocessed food and energy products.
+  category: economy
+  subcategory: prices
+  dataset: ine_cpi_special_groups
+  unit: percent
+  frequency: monthly
+  extraction:
+    kind: ine_series
+    include:
+    - General sin alimentos no elaborados ni productos energéticos
+    - Variación anual
+- code: goods_exports
+  name: Goods exports
+  description: Declared value of Spanish merchandise exports to the world.
+  category: economy
+  subcategory: merchandise_trade
+  dataset: datacomex_total_trade
+  unit: eur
+  frequency: monthly
+  extraction:
+    kind: datacomex_field
+    field: Exportación
+- code: goods_imports
+  name: Goods imports
+  description: Declared value of Spanish merchandise imports from the world.
+  category: economy
+  subcategory: merchandise_trade
+  dataset: datacomex_total_trade
+  unit: eur
+  frequency: monthly
+  extraction:
+    kind: datacomex_field
+    field: Importación
+- code: goods_trade_balance
+  name: Goods trade balance
+  description: Goods exports minus goods imports.
+  category: economy
+  subcategory: merchandise_trade
+  unit: eur
+  frequency: monthly
+  dependencies:
+  - goods_exports
+  - goods_imports
+  formula: goods_exports - goods_imports
+  extraction:
+    kind: derived
+- code: goods_coverage_ratio
+  name: Goods trade coverage ratio
+  description: Goods exports divided by goods imports, expressed as a percentage.
+  category: economy
+  subcategory: merchandise_trade
+  unit: percent
+  frequency: monthly
+  dependencies:
+  - goods_exports
+  - goods_imports
+  formula: goods_exports / goods_imports * 100
+  extraction:
+    kind: derived
+- code: public_debt_total
+  name: General government gross debt
+  description: Consolidated general government debt under the Excessive Deficit Procedure.
+  category: public_finances
+  subcategory: debt
+  dataset: bde_public_debt
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: bde_series
+    series_code: DTNPDE2010_P00000_PS_APU
+- code: public_debt_cash_deposits
+  name: Public debt - currency and deposits
+  description: EDP public debt represented by currency and deposits.
+  category: public_finances
+  subcategory: debt
+  dataset: bde_public_debt
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: bde_series
+    series_code: DTNPDE2010_F20000_PS_APU
+- code: public_debt_securities
+  name: Public debt - debt securities
+  description: EDP public debt represented by debt securities.
+  category: public_finances
+  subcategory: debt
+  dataset: bde_public_debt
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: bde_series
+    series_code: DTNPDE2010_F30000_PS_APU
+- code: public_debt_loans
+  name: Public debt - loans
+  description: EDP public debt represented by loans.
+  category: public_finances
+  subcategory: debt
+  dataset: bde_public_debt
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: bde_series
+    series_code: DTNPDE2010_F40000_PS_APU
+- code: public_debt_gdp
+  name: Public debt to GDP
+  description: General government debt divided by the sum of nominal GDP in the latest
+    four quarters.
+  category: public_finances
+  subcategory: debt
+  unit: percent
+  frequency: quarterly
+  dependencies:
+  - public_debt_total
+  - gdp_nominal
+  formula: public_debt_total / rolling_sum(gdp_nominal, 4) * 100
+  extraction:
+    kind: derived
+- code: public_debt_yoy_change
+  name: Annual public debt growth
+  description: Year-on-year percentage change in general government debt.
+  category: public_finances
+  subcategory: debt
+  unit: percent
+  frequency: quarterly
+  dependencies:
+  - public_debt_total
+  formula: pct_change(public_debt_total, 4)
+  extraction:
+    kind: derived
+- code: general_government_revenue
+  name: General government revenue
+  description: Total non-financial resources of general government in national accounts.
+  category: public_finances
+  subcategory: fiscal_balance
+  dataset: igae_quarterly_non_financial_accounts
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Recursos
+- code: general_government_expenditure
+  name: General government expenditure
+  description: Total non-financial uses of general government in national accounts.
+  category: public_finances
+  subcategory: fiscal_balance
+  dataset: igae_quarterly_non_financial_accounts
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Empleos
+- code: general_government_balance
+  name: General government balance
+  description: General government net lending or borrowing in national accounts.
+  category: public_finances
+  subcategory: fiscal_balance
+  dataset: igae_quarterly_non_financial_accounts
+  unit: million_eur
+  frequency: quarterly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Capacidad
+    - necesidad
+    - financiación
+- code: general_government_balance_gdp
+  name: General government balance to GDP
+  description: General government net lending or borrowing divided by four-quarter
+    nominal GDP.
+  category: public_finances
+  subcategory: fiscal_balance
+  unit: percent
+  frequency: quarterly
+  dependencies:
+  - general_government_balance
+  - gdp_nominal
+  formula: general_government_balance / rolling_sum(gdp_nominal, 4) * 100
+  extraction:
+    kind: derived
+- code: state_budget_revenue_recognised
+  name: State budget recognised revenue
+  description: Recognised revenue rights in the State budget execution report.
+  category: public_finances
+  subcategory: budget_execution
+  dataset: igae_state_budget_execution
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total
+    column_include:
+    - derechos reconocidos netos
+- code: state_budget_revenue_forecast
+  name: State budget definitive revenue forecast
+  description: Definitive revenue forecast in the State budget execution report.
+  category: public_finances
+  subcategory: budget_execution
+  dataset: igae_state_budget_execution
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total
+    column_include:
+    - previsiones presupuestarias
+- code: state_budget_expenditure_recognised
+  name: State budget recognised expenditure
+  description: Recognised expenditure obligations in the State budget execution report.
+  category: public_finances
+  subcategory: budget_execution
+  dataset: igae_state_budget_execution
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total
+    column_include:
+    - obligaciones reconocidas netas
+- code: state_budget_final_appropriation
+  name: State budget final appropriation
+  description: Final expenditure appropriation in the State budget execution report.
+  category: public_finances
+  subcategory: budget_execution
+  dataset: igae_state_budget_execution
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total
+    column_include:
+    - créditos definitivos
+- code: state_interest_expenditure
+  name: State interest expenditure
+  description: Recognised expenditure on interest in the State budget execution report.
+  category: public_finances
+  subcategory: budget_execution
+  dataset: igae_state_budget_execution
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Gastos financieros
+    column_include:
+    - obligaciones reconocidas netas
+- code: state_revenue_execution_pct
+  name: State revenue execution
+  description: Recognised revenue rights divided by the definitive revenue forecast.
+  category: public_finances
+  subcategory: budget_execution
+  unit: percent
+  frequency: monthly
+  dependencies:
+  - state_budget_revenue_recognised
+  - state_budget_revenue_forecast
+  formula: state_budget_revenue_recognised / state_budget_revenue_forecast * 100
+  extraction:
+    kind: derived
+- code: state_spending_execution_pct
+  name: State spending execution
+  description: Recognised expenditure obligations divided by final appropriations.
+  category: public_finances
+  subcategory: budget_execution
+  unit: percent
+  frequency: monthly
+  dependencies:
+  - state_budget_expenditure_recognised
+  - state_budget_final_appropriation
+  formula: state_budget_expenditure_recognised / state_budget_final_appropriation
+    * 100
+  extraction:
+    kind: derived
+- code: tax_revenue_total
+  name: Total tax revenue
+  description: Net tax revenue managed by the Spanish Tax Agency.
+  category: public_finances
+  subcategory: tax_revenue
+  dataset: aeat_monthly_tax_revenue
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total ingresos tributarios
+- code: tax_revenue_irpf
+  name: Personal income tax revenue
+  description: Net revenue from personal income tax.
+  category: public_finances
+  subcategory: tax_revenue
+  dataset: aeat_monthly_tax_revenue
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Renta
+    - personas físicas
+- code: tax_revenue_vat
+  name: VAT revenue
+  description: Net revenue from value added tax.
+  category: public_finances
+  subcategory: tax_revenue
+  dataset: aeat_monthly_tax_revenue
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Valor añadido
+- code: tax_revenue_corporate
+  name: Corporate income tax revenue
+  description: Net revenue from corporate income tax.
+  category: public_finances
+  subcategory: tax_revenue
+  dataset: aeat_monthly_tax_revenue
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Sociedades
+- code: tax_refunds
+  name: Tax refunds
+  description: Tax refunds paid by the Spanish Tax Agency.
+  category: public_finances
+  subcategory: tax_revenue
+  dataset: aeat_monthly_tax_revenue
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Devoluciones
+- code: labour_force
+  name: Labour force
+  description: Economically active population according to the Labour Force Survey.
+  category: employment
+  subcategory: labour_force_survey
+  dataset: ine_epa_summary
+  unit: people
+  frequency: quarterly
+  extraction:
+    kind: html_table_field
+    field: Activos
+    multiplier: '1000'
+- code: employed_people
+  name: Employed people
+  description: Employed population according to the Labour Force Survey.
+  category: employment
+  subcategory: labour_force_survey
+  dataset: ine_epa_summary
+  unit: people
+  frequency: quarterly
+  extraction:
+    kind: html_table_field
+    field: Ocupados
+    multiplier: '1000'
+- code: unemployed_people
+  name: Unemployed people
+  description: Unemployed population according to the Labour Force Survey.
+  category: employment
+  subcategory: labour_force_survey
+  dataset: ine_epa_summary
+  unit: people
+  frequency: quarterly
+  extraction:
+    kind: html_table_field
+    field: Parados
+    multiplier: '1000'
+- code: unemployment_rate
+  name: Unemployment rate
+  description: Unemployed population as a percentage of the labour force.
+  category: employment
+  subcategory: labour_force_survey
+  dataset: ine_epa_summary
+  unit: percent
+  frequency: quarterly
+  extraction:
+    kind: html_table_field
+    field: Tasa de paro
+- code: activity_rate
+  name: Activity rate
+  description: Labour force as a percentage of the working-age population.
+  category: employment
+  subcategory: labour_force_survey
+  dataset: ine_epa_summary
+  unit: percent
+  frequency: quarterly
+  extraction:
+    kind: html_table_field
+    field: Tasa de actividad
+- code: youth_unemployment_rate
+  name: Unemployment rate, ages 20 to 24
+  description: Unemployment rate for people aged 20 to 24, both sexes. The INE table
+    does not publish a single 16-to-24 aggregate.
+  category: employment
+  subcategory: labour_force_survey
+  dataset: ine_youth_unemployment
+  unit: percent
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Ambos sexos
+    - De 20 a 24 años
+- code: labour_cost_total
+  name: Total labour cost per worker
+  description: Total labour cost per worker and month.
+  category: employment
+  subcategory: labour_costs
+  dataset: ine_labour_costs
+  unit: eur_per_worker_month
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Coste laboral total
+    - Industria, construcción y servicios
+    - Total Nacional
+    - Euros
+- code: salary_cost_total
+  name: Total salary cost per worker
+  description: Total salary cost per worker and month.
+  category: employment
+  subcategory: labour_costs
+  dataset: ine_labour_costs
+  unit: eur_per_worker_month
+  frequency: quarterly
+  extraction:
+    kind: ine_series
+    include:
+    - Coste salarial total
+    - Industria, construcción y servicios
+    - Total Nacional
+    - Euros
+- code: social_security_affiliates_avg
+  name: Average Social Security affiliation
+  description: Monthly average number of Social Security affiliations.
+  category: employment
+  subcategory: administrative_registers
+  dataset: social_security_affiliation_article
+  unit: affiliations
+  frequency: monthly
+  extraction:
+    kind: html_regex
+    value_regex: (?:afiliados medios|afiliación media|afiliados de media)[^0-9]{0,120}(?P<value>[0-9]{1,3}(?:\.[0-9]{3})+)
+- code: social_security_affiliates_adjusted
+  name: Seasonally adjusted Social Security affiliation
+  description: Social Security affiliation adjusted for seasonality and calendar effects.
+  category: employment
+  subcategory: administrative_registers
+  dataset: social_security_affiliation_article
+  unit: affiliations
+  frequency: monthly
+  extraction:
+    kind: html_regex
+    value_regex: '(?:si se descuenta la estacionalidad(?: y el efecto calendario)?|serie
+      desestacionalizada|desestacionalizad[oa]s?)[^0-9]{0,180}(?:la afiliación alcanza\s*)?(?P<value>[0-9]{1,3}(?:\.[0-9]{3})+)'
+- code: registered_unemployment
+  name: Registered unemployment
+  description: People registered as unemployed with the public employment services.
+  category: employment
+  subcategory: administrative_registers
+  dataset: sepe_registered_unemployment
+  unit: people
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total
+- code: pension_count
+  name: Contributory pensions in payment
+  description: Number of contributory pensions in payment; pensions, not unique people.
+  category: pensions
+  subcategory: beneficiaries
+  dataset: social_security_pension_series
+  unit: pensions
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total sistema
+    column_include:
+    - Número
+- code: average_pension
+  name: Average contributory pension
+  description: Average monthly amount of contributory pensions in payment.
+  category: pensions
+  subcategory: amounts
+  dataset: social_security_pension_series
+  unit: eur_per_month
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total sistema
+    column_include:
+    - Pensión media
+- code: average_retirement_pension
+  name: Average retirement pension
+  description: Average monthly amount of retirement pensions in payment.
+  category: pensions
+  subcategory: amounts
+  dataset: social_security_pension_series
+  unit: eur_per_month
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total sistema
+    - Jubilación
+    column_include:
+    - Pensión media
+- code: pension_monthly_payroll
+  name: Monthly contributory pension payroll
+  description: Monthly payroll of contributory Social Security pensions.
+  category: pensions
+  subcategory: expenditure
+  dataset: social_security_pension_payroll
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total
+    column_include:
+    - Nómina
+- code: pensions_with_minimum_supplement
+  name: Pensions with minimum supplement
+  description: Number of pensions receiving a supplement to reach the statutory minimum.
+  category: pensions
+  subcategory: beneficiaries
+  dataset: social_security_minimum_supplements
+  unit: pensions
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total
+    column_include:
+    - Número
+- code: pensioner_count
+  name: Pensioners
+  description: Unique people receiving one or more Social Security pensions.
+  category: pensions
+  subcategory: beneficiaries
+  dataset: social_security_pensioners
+  unit: people
+  frequency: monthly
+  extraction:
+    kind: excel_label
+    row_include:
+    - Total
+    column_include:
+    - Pensionistas
+- code: affiliates_per_pension
+  name: Affiliations per pension
+  description: Average Social Security affiliations divided by contributory pensions
+    in payment.
+  category: pensions
+  subcategory: sustainability
+  unit: ratio
+  frequency: monthly
+  dependencies:
+  - social_security_affiliates_avg
+  - pension_count
+  formula: social_security_affiliates_avg / pension_count
+  extraction:
+    kind: derived
+- code: affiliates_per_pensioner
+  name: Affiliations per pensioner
+  description: Average Social Security affiliations divided by unique pensioners.
+  category: pensions
+  subcategory: sustainability
+  unit: ratio
+  frequency: monthly
+  dependencies:
+  - social_security_affiliates_avg
+  - pensioner_count
+  formula: social_security_affiliates_avg / pensioner_count
+  extraction:
+    kind: derived

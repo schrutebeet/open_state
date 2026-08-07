@@ -1,0 +1,17 @@
+categories:
+  - code: economy
+    name: Economy
+    description: National output, prices, demand and external trade.
+    display_order: 10
+  - code: public_finances
+    name: Public finances and debt
+    description: Public debt, deficit, taxation and state budget execution.
+    display_order: 20
+  - code: employment
+    name: Employment
+    description: Labour force, employment, unemployment, affiliation and labour costs.
+    display_order: 30
+  - code: pensions
+    name: Pensions
+    description: Pension beneficiaries, pension amounts, payroll and system ratios.
+    display_order: 40

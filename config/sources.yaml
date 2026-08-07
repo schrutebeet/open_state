@@ -1,0 +1,197 @@
+sources:
+- code: ine
+  name: Instituto Nacional de Estadística
+  base_url: https://www.ine.es
+  institution_type: national_statistics_office
+- code: bde
+  name: Banco de España
+  base_url: https://www.bde.es
+  institution_type: independent_central_bank
+- code: datacomex
+  authentication: bearer_token
+  credential_names:
+  - datacomex_username
+  - datacomex_password
+  name: DataComex - Secretaría de Estado de Comercio
+  base_url: https://datacomex.comercio.es
+  institution_type: government
+- code: aeat
+  name: Agencia Estatal de Administración Tributaria
+  base_url: https://sede.agenciatributaria.gob.es
+  institution_type: government
+- code: igae
+  name: Intervención General de la Administración del Estado
+  base_url: https://www.igae.pap.hacienda.gob.es
+  institution_type: government_control_body
+- code: social_security
+  name: Seguridad Social
+  base_url: https://www.seg-social.es
+  institution_type: government
+- code: sepe
+  name: Servicio Público de Empleo Estatal
+  base_url: https://www.sepe.es
+  institution_type: government
+datasets:
+- code: ine_gdp_current_prices
+  source: ine
+  connector: ine_table
+  endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
+  config:
+    table_id: 67823
+    nult: 12
+- code: ine_gdp_volume
+  source: ine
+  connector: ine_table
+  endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
+  config:
+    table_id: 67824
+    nult: 12
+- code: ine_cpi_general
+  source: ine
+  connector: ine_table
+  endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
+  config:
+    table_id: 76125
+    nult: 18
+- code: ine_cpi_special_groups
+  source: ine
+  connector: ine_table
+  endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
+  config:
+    table_id: 76115
+    nult: 18
+- code: ine_youth_unemployment
+  source: ine
+  connector: ine_table
+  endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
+  config:
+    table_id: 65219
+    nult: 12
+- code: ine_labour_costs
+  source: ine
+  connector: ine_table
+  endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
+  config:
+    table_id: 6030
+    nult: 12
+- code: ine_epa_summary
+  source: ine
+  connector: html_table
+  endpoint: https://www.ine.es/prensa/epa_tabla.htm
+  config:
+    table_index: 0
+    period_column: 0
+- code: bde_public_debt
+  source: bde
+  connector: bde_series
+  endpoint: https://app.bde.es/bierest/resources/srdatosapp/listaSeries
+  config:
+    range: 60M
+    series:
+    - DTNPDE2010_P00000_PS_APU
+    - DTNPDE2010_F20000_PS_APU
+    - DTNPDE2010_F30000_PS_APU
+    - DTNPDE2010_F40000_PS_APU
+- code: datacomex_total_trade
+  source: datacomex
+  connector: datacomex
+  required: false
+  endpoint: https://comercio.serviciosmin.gob.es/DatacomexAPI/ObtenerDatos
+  config:
+    flow: I/E
+    period: LastM
+    country: TOTAL
+    taric: TOTAL
+    province: TOTAL
+- code: aeat_monthly_tax_revenue
+  source: aeat
+  connector: direct_file
+  endpoint: https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/Estadisticas/Recaudacion_Tributaria/Informes_mensuales/Cuadros_estadisticos_series_es_es.xlsx
+  config:
+    source_page: https://sede.agenciatributaria.gob.es/Sede/datosabiertos/catalogo/hacienda/Informe_mensual_de_Recaudacion_Tributaria.shtml
+- code: igae_quarterly_non_financial_accounts
+  source: igae
+  connector: igae_quarterly_accounts
+  endpoint: https://www.igae.pap.hacienda.gob.es/sitios/igae/es-ES/Contabilidad/ContabilidadNacional/Publicaciones/Documents/AAPP_Trimestral/T_AAPP.xlsx
+  config:
+    source_page: https://www.igae.pap.hacienda.gob.es/sitios/igae/es-ES/Contabilidad/ContabilidadNacional/Publicaciones/paginas/itnofinancierastotal.aspx
+- code: igae_state_budget_execution
+  source: igae
+  connector: igae_state_budget_execution
+  endpoint: https://www.igae.pap.hacienda.gob.es/sitios/igae/es-ES/Contabilidad/ContabilidadPublica/CPE/EjecucionPresupuestaria/Paginas/imextractoejecucion.aspx
+  config:
+    link_include:
+    - Cuadros
+    extensions:
+    - .xls
+    - .xlsx
+- code: social_security_affiliation_article
+  source: social_security
+  connector: html_regex
+  endpoint: https://revista.seg-social.es/estadisticas/
+  config:
+    follow_link: true
+    link_include:
+    - (?:afiliaci.n|afiliados)
+    link_exclude:
+    - extranjer|quincena|diaria
+- code: social_security_pension_series
+  source: social_security
+  connector: social_security_pensions
+  endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/est23/est24
+  config:
+    link_include:
+    - Series de pensiones en vigor
+    extensions:
+    - .xlsx
+    - .xls
+- code: social_security_pension_payroll
+  source: social_security
+  connector: social_security_pensions
+  endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/est23/est24
+  config:
+    link_include:
+    - Importe n.mina por conceptos
+    extensions:
+    - .xlsx
+    - .xls
+- code: social_security_pensions_by_regime
+  source: social_security
+  connector: html_excel
+  endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/est23/est24
+  config:
+    link_include:
+    - Por reg.menes
+    extensions:
+    - .xlsx
+    - .xls
+- code: social_security_minimum_supplements
+  source: social_security
+  connector: html_excel
+  endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/est23/est24
+  config:
+    link_include:
+    - Con complemento a m.nimos
+    extensions:
+    - .xlsx
+    - .xls
+- code: social_security_pensioners
+  source: social_security
+  connector: social_security_pensions
+  endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/EST23/26bce586-014b-4c4e-9484-009cee21e271
+  config:
+    link_include:
+    - Pensionistas
+    extensions:
+    - .xlsx
+    - .xls
+- code: sepe_registered_unemployment
+  source: sepe
+  connector: sepe_registered_unemployment
+  endpoint: https://www.sepe.es/HomeSepe/que-es-el-sepe/estadisticas/datos-avance/paro.html
+  config:
+    link_include:
+    - Evoluci.n mensual del paro
+    extensions:
+    - .xls
+    - .xlsx
