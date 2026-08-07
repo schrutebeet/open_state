@@ -16,7 +16,7 @@ from civic_metrics.settings import Settings  # noqa: E402
 
 
 def main() -> None:
-    settings = Settings(project_root=ROOT)
+    settings = Settings(project_root=ROOT, _env_file=ROOT / ".env")
     factory = make_session_factory(create_database_engine(settings.resolved_database_url()))
     with factory() as session:
         rows = session.execute(
