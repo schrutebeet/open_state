@@ -22,3 +22,12 @@ def test_settings_loads_genai_configuration_from_dotenv(tmp_path: Path) -> None:
     assert settings.genai_validation_strict is True
     assert settings.openai_api_key is not None
     assert settings.openai_api_key.get_secret_value() == "test-key"
+
+
+def test_settings_can_load_dotenv_outside_the_current_directory(tmp_path: Path) -> None:
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("GENAI_VALIDATION_ENABLED=true\n", encoding="utf-8")
+
+    settings = Settings(project_root=tmp_path, _env_file=tmp_path / ".env")
+
+    assert settings.genai_validation_enabled is True
