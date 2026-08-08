@@ -218,7 +218,7 @@ indicators:
   category: public_finances
   subcategory: debt
   dataset: bde_public_debt
-  unit: million_eur
+  unit: thousand_eur
   frequency: quarterly
   extraction:
     kind: bde_series
