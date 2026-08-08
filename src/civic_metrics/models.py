@@ -100,6 +100,7 @@ class IngestionRun(Base):
     summary_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     artifacts: Mapped[list[RawArtifact]] = relationship(back_populates="run")
+    genai_validation_logs: Mapped[list[GenAIValidationLog]] = relationship(back_populates="run")
 
 
 class RawArtifact(Base):
@@ -116,6 +117,31 @@ class RawArtifact(Base):
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     run: Mapped[IngestionRun] = relationship(back_populates="artifacts")
+
+
+class GenAIValidationLog(Base):
+    """Audit record for one GenAI validation attempt."""
+
+    __tablename__ = "genai_validation_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("ingestion_runs.id"), index=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("source_datasets.id"), index=True)
+    raw_artifact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("raw_artifacts.id"), nullable=True, index=True
+    )
+    validated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    decision: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(8, 6), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_truncated: Mapped[bool] = mapped_column(Boolean, default=False)
+    request_summary_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    response_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    run: Mapped[IngestionRun] = relationship(back_populates="genai_validation_logs")
 
 
 class Observation(Base):
@@ -165,9 +191,7 @@ class Observation(Base):
 
 class ObservationDependency(Base):
     __tablename__ = "observation_dependencies"
-    __table_args__ = (
-        UniqueConstraint("observation_id", "depends_on_observation_id"),
-    )
+    __table_args__ = (UniqueConstraint("observation_id", "depends_on_observation_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     observation_id: Mapped[int] = mapped_column(ForeignKey("observations.id"), index=True)

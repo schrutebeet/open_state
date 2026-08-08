@@ -4,6 +4,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
@@ -15,7 +16,7 @@ from civic_metrics.connectors.base import ConnectorContext
 from civic_metrics.connectors.datacomex import MissingCredentialsError
 from civic_metrics.genai_validation import GenAIDataValidator
 from civic_metrics.http import HttpClient
-from civic_metrics.models import IngestionRun, Observation, SourceDataset
+from civic_metrics.models import GenAIValidationLog, IngestionRun, Observation, SourceDataset
 from civic_metrics.processors import DerivedIndicatorEngine, FormulaError
 from civic_metrics.repository import save_observation
 from civic_metrics.settings import Settings
@@ -116,8 +117,7 @@ class PipelineOrchestrator:
         failures = sum(item.status == "failed" and item.required for item in results)
         successes = sum(item.status == "success" for item in results)
         incomplete = sum(
-            item.required and item.status in {"partial", "empty", "skipped"}
-            for item in results
+            item.required and item.status in {"partial", "empty", "skipped"} for item in results
         )
         if failures == 0 and incomplete == 0 and not derived_errors:
             status = "success"
@@ -168,6 +168,7 @@ class PipelineOrchestrator:
                 ConnectorContext(settings=self.settings, http=http),
             )
             candidates = connector.extract(definition, payload, indicators)
+            validation = None
             with self.session_factory() as session:
                 dataset_row = session.scalar(
                     select(SourceDataset)
@@ -193,6 +194,47 @@ class PipelineOrchestrator:
                     # the artifact from the run in which they were first inserted.
                     if observation.raw_artifact_id == artifact.id:
                         inserted += 1
+                if self.settings.genai_validation_enabled:
+                    validation = GenAIDataValidator(
+                        model=self.settings.genai_validation_model,
+                        max_payload_chars=self.settings.genai_validation_max_payload_chars,
+                        api_key=(
+                            self.settings.openai_api_key.get_secret_value()
+                            if self.settings.openai_api_key is not None
+                            else None
+                        ),
+                    ).validate(definition, indicators, payload, candidates)
+                    session.add(
+                        GenAIValidationLog(
+                            run_id=run.id,
+                            dataset_id=dataset_row.id,
+                            raw_artifact_id=artifact.id,
+                            validated_at=datetime.now(UTC),
+                            model=validation.model,
+                            status=validation.status,
+                            decision=validation.decision,
+                            confidence=(
+                                Decimal(str(validation.confidence))
+                                if validation.confidence is not None
+                                else None
+                            ),
+                            description=validation.description,
+                            error=validation.error,
+                            payload_truncated=validation.payload_truncated,
+                            request_summary_json={
+                                "source_url": payload.source_url,
+                                "content_type": payload.content_type,
+                                "payload_sha256": payload.sha256,
+                                "payload_bytes": len(payload.body),
+                                "candidate_count": len(candidates),
+                                "indicator_codes": [item.code for item in indicators],
+                                "max_payload_chars": (
+                                    self.settings.genai_validation_max_payload_chars
+                                ),
+                            },
+                            response_json=validation.to_dict(),
+                        )
+                    )
                 session.commit()
                 path = artifact.local_path
             expected_codes = {item.code for item in indicators}
@@ -208,16 +250,7 @@ class PipelineOrchestrator:
                 status = "success"
                 error = None
             genai_validation = None
-            if self.settings.genai_validation_enabled:
-                validation = GenAIDataValidator(
-                    model=self.settings.genai_validation_model,
-                    max_payload_chars=self.settings.genai_validation_max_payload_chars,
-                    api_key=(
-                        self.settings.openai_api_key.get_secret_value()
-                        if self.settings.openai_api_key is not None
-                        else None
-                    ),
-                ).validate(definition, indicators, payload, candidates)
+            if validation is not None:
                 genai_validation = validation.to_dict()
                 if validation.status == "failed" and self.settings.genai_validation_strict:
                     status = "partial"
