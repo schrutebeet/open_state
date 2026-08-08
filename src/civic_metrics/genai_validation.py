@@ -76,8 +76,8 @@ class GenAIDataValidator:
                 instructions=(
                     "You validate a public-data ingestion result. Compare every written result "
                     "with the supplied source payload rendering. Check indicator identity, value, "
-                    "unit, geography, and period. Do not invent evidence. If the rendering is "
-                    "truncated or ambiguous, return Invalid and explain that limitation. Return "
+                    "unit and period. Do not invent evidence. If the rendering is truncated "
+                    "or ambiguous, return Invalid and explain that limitation. Return "
                     "Valid only when no material contradiction was found. Return exactly the "
                     "structured JSON response specified by the schema. Keep description to at "
                     "most two concise sentences. "
