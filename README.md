@@ -166,6 +166,16 @@ export OPENAI_API_KEY='...'
 export GENAI_VALIDATION_ENABLED=true
 ```
 
+By default, every fetched dataset is validated. To validate only specific database
+dataset IDs, set `GENAI_VALIDATION_DATASET_IDS`; it accepts one ID, comma-separated
+IDs, or a JSON list:
+
+```bash
+export GENAI_VALIDATION_DATASET_IDS=12
+# or: GENAI_VALIDATION_DATASET_IDS=12,13
+# or: GENAI_VALIDATION_DATASET_IDS='[12, 13]'
+```
+
 The default model is `gpt-5.6-luna`. Validation is advisory: its structured report
 appears under each dataset's `genai_validation` field in `--json` output, while API
 errors do not stop ingestion. To mark an otherwise successful dataset as `partial`

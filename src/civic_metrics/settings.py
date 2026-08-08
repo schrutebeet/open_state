@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Annotated, Any
 
-from pydantic import Field, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -30,12 +33,44 @@ class Settings(BaseSettings):
     max_history_periods: int = 12
     fail_fast: bool = False
     genai_validation_enabled: bool = False
+    genai_validation_dataset_ids: Annotated[tuple[int, ...] | None, NoDecode] = None
     genai_validation_model: str = "gpt-5.6-luna"
     genai_validation_max_payload_chars: int = 100_000
     genai_validation_strict: bool = False
     openai_api_key: SecretStr | None = Field(default=None, repr=False)
     datacomex_username: str | None = None
     datacomex_password: str | None = None
+
+    @field_validator("genai_validation_dataset_ids", mode="before")
+    @classmethod
+    def parse_genai_validation_dataset_ids(cls, value: Any) -> tuple[int, ...] | None:
+        """Accept one ID, comma-separated IDs, or a JSON list; unset means all."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw or raw.lower() == "all":
+                return None
+            if raw.startswith("["):
+                value = json.loads(raw)
+            else:
+                value = raw.split(",")
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            ids = tuple(int(item) for item in value)
+            if any(dataset_id < 1 for dataset_id in ids):
+                raise ValueError("GENAI_VALIDATION_DATASET_IDS must contain positive integers")
+            return ids
+        dataset_id = int(value)
+        if dataset_id < 1:
+            raise ValueError("GENAI_VALIDATION_DATASET_IDS must contain positive integers")
+        return (dataset_id,)
+
+    def should_validate_dataset(self, dataset_id: int) -> bool:
+        """Return whether this database dataset ID is selected for GenAI validation."""
+        return (
+            self.genai_validation_dataset_ids is None
+            or dataset_id in self.genai_validation_dataset_ids
+        )
 
     def resolved_config_dir(self) -> Path:
         return self._resolve(self.config_dir)

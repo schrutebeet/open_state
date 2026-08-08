@@ -49,11 +49,17 @@ class GenAIDataValidator:
         indicators: list[IndicatorDefinition],
         payload: DatasetPayload,
         candidates: list[ObservationCandidate],
+        *,
+        dataset_id: int | None = None,
     ) -> GenAIValidationResult:
         try:
             from openai import OpenAI
 
-            evidence, truncated = _payload_evidence(payload, self.max_payload_chars)
+            evidence, truncated = _payload_evidence(
+                payload,
+                self.max_payload_chars,
+                dataset_id=dataset_id,
+            )
             request = {
                 "dataset": definition.code,
                 "source_url": payload.source_url,
@@ -138,12 +144,18 @@ def _candidate_dict(candidate: ObservationCandidate) -> dict[str, object]:
     }
 
 
-def _payload_evidence(payload: DatasetPayload, limit: int) -> tuple[str, bool]:
+def _payload_evidence(
+    payload: DatasetPayload,
+    limit: int,
+    *,
+    dataset_id: int | None = None,
+) -> tuple[str, bool]:
     content_type = payload.content_type.lower()
     source_url = payload.source_url.lower()
     is_workbook = "spreadsheet" in content_type or "excel" in content_type
     if is_workbook or source_url.endswith((".xls", ".xlsx")):
-        rendered = _render_workbook(payload.body)
+        sheet_names = _validation_workbook_sheets(dataset_id)
+        rendered = _render_workbook(payload.body, sheet_names=sheet_names)
     else:
         text = payload.body.decode("utf-8", errors="replace")
         if "json" in content_type:
@@ -166,6 +178,15 @@ def _payload_evidence(payload: DatasetPayload, limit: int) -> tuple[str, bool]:
             limit,
         )
     return rendered[:limit], truncated
+
+
+def _validation_workbook_sheets(dataset_id: int | None) -> list[str] | None:
+    """Return workbook sheets needed for the known targeted validations."""
+    if dataset_id == 10:
+        return ["Ingresos tributarios"]
+    if dataset_id == 13:
+        return ["Tabla_1_5"]
+    return None
 
 
 def _compact_json(value: Any) -> Any:
@@ -191,8 +212,14 @@ def _compact_json(value: Any) -> Any:
     }
 
 
-def _render_workbook(body: bytes) -> str:
-    sheets = pd.read_excel(io.BytesIO(body), sheet_name=None, header=None)
+def _render_workbook(body: bytes, *, sheet_names: list[str] | None = None) -> str:
+    sheets = pd.read_excel(
+        io.BytesIO(body),
+        sheet_name=sheet_names if sheet_names is not None else None,
+        header=None,
+    )
+    if isinstance(sheets, pd.DataFrame):
+        sheets = {sheet_names[0] if sheet_names else "data": sheets}
     parts: list[str] = []
     for name, frame in sheets.items():
         cleaned = frame.dropna(how="all").dropna(axis=1, how="all")

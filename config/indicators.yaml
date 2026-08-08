@@ -429,7 +429,7 @@ indicators:
   unit: million_eur
   frequency: monthly
   extraction:
-    kind: excel_label
+    kind: aeat_tax_revenue
     row_include:
     - Total ingresos tributarios
 - code: tax_revenue_irpf
@@ -441,7 +441,7 @@ indicators:
   unit: million_eur
   frequency: monthly
   extraction:
-    kind: excel_label
+    kind: aeat_tax_revenue
     row_include:
     - Renta
     - personas físicas
@@ -454,7 +454,7 @@ indicators:
   unit: million_eur
   frequency: monthly
   extraction:
-    kind: excel_label
+    kind: aeat_tax_revenue
     row_include:
     - Valor añadido
 - code: tax_revenue_corporate
@@ -466,7 +466,7 @@ indicators:
   unit: million_eur
   frequency: monthly
   extraction:
-    kind: excel_label
+    kind: aeat_tax_revenue
     row_include:
     - Sociedades
 - code: tax_refunds
@@ -478,7 +478,7 @@ indicators:
   unit: million_eur
   frequency: monthly
   extraction:
-    kind: excel_label
+    kind: aeat_tax_revenue
     row_include:
     - Devoluciones
 - code: labour_force

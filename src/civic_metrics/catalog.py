@@ -46,6 +46,7 @@ class ExtractionDefinition(BaseModel):
         "html_table_field",
         "html_regex",
         "excel_label",
+        "aeat_tax_revenue",
         "social_security_affiliates",
         "social_security_minimum_supplements",
         "derived",

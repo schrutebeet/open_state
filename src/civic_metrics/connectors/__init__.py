@@ -1,3 +1,4 @@
+from civic_metrics.connectors.aeat_tax_revenue import AeatTaxRevenueConnector
 from civic_metrics.connectors.base import Connector
 from civic_metrics.connectors.bde import BdeSeriesConnector
 from civic_metrics.connectors.datacomex import DataComexConnector
@@ -18,6 +19,7 @@ from civic_metrics.connectors.social_security_minimum_supplements import (
 from civic_metrics.connectors.social_security_pensions import SocialSecurityPensionsConnector
 
 CONNECTORS: dict[str, type[Connector]] = {
+    AeatTaxRevenueConnector.connector_name: AeatTaxRevenueConnector,
     IneTableConnector.connector_name: IneTableConnector,
     IgaeQuarterlyAccountsConnector.connector_name: IgaeQuarterlyAccountsConnector,
     IgaeStateBudgetExecutionConnector.connector_name: IgaeStateBudgetExecutionConnector,

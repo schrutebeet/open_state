@@ -1,6 +1,9 @@
 import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from io import BytesIO
+
+import openpyxl
 
 from civic_metrics.domain import DatasetPayload, ObservationCandidate, Period
 from civic_metrics.genai_validation import _OUTPUT_SCHEMA, _candidate_dict, _payload_evidence
@@ -47,6 +50,62 @@ def test_json_payload_evidence_uses_lossless_table_encoding_for_repeated_objects
         "columns": ["Fecha", "Anyo", "Valor"],
         "rows": [[1774994400000, 2026, 10.0851], [1767222000000, 2026, 9.9755]],
     }
+
+
+def test_dataset_13_workbook_evidence_includes_only_tabla_1_5() -> None:
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Tabla_1_5"
+    sheet.append(["PERIODO", "SALDOS"])
+    sheet.append(["202607", 22_508_065.43])
+    ignored = workbook.create_sheet("Other sheet")
+    ignored.append(["must not be sent"])
+    buffer = BytesIO()
+    workbook.save(buffer)
+    payload = DatasetPayload(
+        dataset_code="sample",
+        source_code="source",
+        fetched_at=datetime.now(UTC),
+        source_url="https://example.test/data.xlsx",
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        body=buffer.getvalue(),
+        sha256="0" * 64,
+    )
+
+    evidence, truncated = _payload_evidence(payload, 1_000, dataset_id=13)
+
+    assert truncated is False
+    assert "sheet: Tabla_1_5" in evidence
+    assert "202607" in evidence
+    assert "Other sheet" not in evidence
+    assert "must not be sent" not in evidence
+
+
+def test_dataset_10_workbook_evidence_includes_only_tax_revenue_sheets() -> None:
+    workbook = openpyxl.Workbook()
+    first = workbook.active
+    first.title = "Ingresos tributarios"
+    first.append(["All tax revenue fields"])
+    ignored = workbook.create_sheet("Other sheet")
+    ignored.append(["must not be sent"])
+    buffer = BytesIO()
+    workbook.save(buffer)
+    payload = DatasetPayload(
+        dataset_code="sample",
+        source_code="source",
+        fetched_at=datetime.now(UTC),
+        source_url="https://example.test/data.xlsx",
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        body=buffer.getvalue(),
+        sha256="0" * 64,
+    )
+
+    evidence, truncated = _payload_evidence(payload, 1_000, dataset_id=10)
+
+    assert "sheet: Ingresos tributarios" in evidence
+    assert "Other sheet" not in evidence
+    assert "must not be sent" not in evidence
+    assert truncated is False
 
 
 def test_candidate_is_serialized_without_losing_decimal_precision() -> None:

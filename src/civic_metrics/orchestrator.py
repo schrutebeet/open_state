@@ -194,7 +194,9 @@ class PipelineOrchestrator:
                     # the artifact from the run in which they were first inserted.
                     if observation.raw_artifact_id == artifact.id:
                         inserted += 1
-                if self.settings.genai_validation_enabled:
+                if self.settings.genai_validation_enabled and self.settings.should_validate_dataset(
+                    dataset_row.id
+                ):
                     validation = GenAIDataValidator(
                         model=self.settings.genai_validation_model,
                         max_payload_chars=self.settings.genai_validation_max_payload_chars,
@@ -203,7 +205,13 @@ class PipelineOrchestrator:
                             if self.settings.openai_api_key is not None
                             else None
                         ),
-                    ).validate(definition, indicators, payload, candidates)
+                    ).validate(
+                        definition,
+                        indicators,
+                        payload,
+                        candidates,
+                        dataset_id=dataset_row.id,
+                    )
                     session.add(
                         GenAIValidationLog(
                             run_id=run.id,

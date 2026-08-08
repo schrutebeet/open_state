@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import csv
-from io import BytesIO, StringIO
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from dataclasses import dataclass
+from io import BytesIO, StringIO
+from typing import Any
 
 import openpyxl
 
@@ -27,7 +28,14 @@ class WorkbookMatrix:
         self.sheets = sheets
 
     @classmethod
-    def from_bytes(cls, body: bytes, content_type: str, source_url: str) -> "WorkbookMatrix":
+    def from_bytes(
+        cls,
+        body: bytes,
+        content_type: str,
+        source_url: str,
+        *,
+        sheet_names: Iterable[str] | None = None,
+    ) -> WorkbookMatrix:
         lowered = source_url.lower()
         if lowered.endswith(".csv") or content_type in {"text/csv", "application/csv"}:
             text = body.decode("utf-8-sig", errors="replace")
@@ -45,6 +53,8 @@ class WorkbookMatrix:
             book = xlrd.open_workbook(file_contents=body)
             sheets: dict[str, list[list[Any]]] = {}
             for sheet in book.sheets():
+                if sheet_names is not None and sheet.name not in sheet_names:
+                    continue
                 sheets[sheet.name] = [sheet.row_values(index) for index in range(sheet.nrows)]
             return cls(sheets)
 
@@ -52,6 +62,7 @@ class WorkbookMatrix:
         sheets = {
             sheet.title: [list(row) for row in sheet.iter_rows(values_only=True)]
             for sheet in book.worksheets
+            if sheet_names is None or sheet.title in sheet_names
         }
         return cls(sheets)
 
@@ -156,7 +167,9 @@ class WorkbookMatrix:
         samples: list[str] = []
         for sheet_name in sheet_names[:5]:
             for row in self.sheets.get(sheet_name, []):
-                text = " | ".join(str(cell) for cell in row if cell is not None and str(cell).strip())
+                text = " | ".join(
+                    str(cell) for cell in row if cell is not None and str(cell).strip()
+                )
                 normalised = normalise_text(text)
                 if not text:
                     continue

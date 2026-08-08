@@ -105,10 +105,11 @@ datasets:
     province: TOTAL
 - code: aeat_monthly_tax_revenue
   source: aeat
-  connector: direct_file
+  connector: aeat_tax_revenue
   endpoint: https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/Estadisticas/Recaudacion_Tributaria/Informes_mensuales/Cuadros_estadisticos_series_es_es.xlsx
   config:
     source_page: https://sede.agenciatributaria.gob.es/Sede/datosabiertos/catalogo/hacienda/Informe_mensual_de_Recaudacion_Tributaria.shtml
+    data_sheet: Ingresos tributarios
 - code: igae_quarterly_non_financial_accounts
   source: igae
   connector: igae_quarterly_accounts
