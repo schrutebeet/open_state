@@ -46,6 +46,8 @@ class ExtractionDefinition(BaseModel):
         "html_table_field",
         "html_regex",
         "excel_label",
+        "social_security_affiliates",
+        "social_security_minimum_supplements",
         "derived",
     ]
     include: list[str] = Field(default_factory=list)
@@ -77,7 +79,7 @@ class IndicatorDefinition(BaseModel):
     dependencies: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_source_or_formula(self) -> "IndicatorDefinition":
+    def validate_source_or_formula(self) -> IndicatorDefinition:
         if self.extraction.kind == "derived" and not self.formula:
             raise ValueError(f"Derived indicator {self.code} requires a formula")
         if self.extraction.kind != "derived" and not self.dataset:

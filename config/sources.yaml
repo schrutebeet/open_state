@@ -127,14 +127,15 @@ datasets:
     - .xlsx
 - code: social_security_affiliation_article
   source: social_security
-  connector: html_regex
-  endpoint: https://revista.seg-social.es/estadisticas/
+  connector: social_security_affiliates
+  endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/EST8/EST10/EST290/EST291
   config:
-    follow_link: true
     link_include:
-    - (?:afiliaci.n|afiliados)
-    link_exclude:
-    - extranjer|quincena|diaria
+    - Afiliados Medios
+    extensions:
+    - .xls
+    - .xlsx
+    data_sheet: Tabla_1_5
 - code: social_security_pension_series
   source: social_security
   connector: social_security_pensions
@@ -167,7 +168,7 @@ datasets:
     - .xls
 - code: social_security_minimum_supplements
   source: social_security
-  connector: html_excel
+  connector: social_security_minimum_supplements
   endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/est23/est24
   config:
     link_include:
@@ -175,6 +176,7 @@ datasets:
     extensions:
     - .xlsx
     - .xls
+    data_sheet: Min_número_%
 - code: social_security_pensioners
   source: social_security
   connector: social_security_pensions

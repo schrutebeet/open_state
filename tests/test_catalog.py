@@ -7,7 +7,7 @@ def test_catalog_has_unique_references() -> None:
     catalog = load_catalog(Path("config"))
     assert len(catalog.categories) == 4
     assert len(catalog.datasets) == 19
-    assert len(catalog.indicators) == 55
+    assert len(catalog.indicators) == 54
     assert len({item.code for item in catalog.indicators}) == len(catalog.indicators)
     assert catalog.indicator_by_code["goods_trade_balance"].formula == (
         "goods_exports - goods_imports"
@@ -16,3 +16,4 @@ def test_catalog_has_unique_references() -> None:
         "public_debt_total",
         "gdp_nominal",
     ]
+    assert "social_security_affiliates_adjusted" not in catalog.indicator_by_code

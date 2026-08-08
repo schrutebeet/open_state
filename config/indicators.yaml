@@ -592,20 +592,7 @@ indicators:
   unit: affiliations
   frequency: monthly
   extraction:
-    kind: html_regex
-    value_regex: (?:afiliados medios|afiliación media|afiliados de media)[^0-9]{0,120}(?P<value>[0-9]{1,3}(?:\.[0-9]{3})+)
-- code: social_security_affiliates_adjusted
-  name: Seasonally adjusted Social Security affiliation
-  description: Social Security affiliation adjusted for seasonality and calendar effects.
-  category: employment
-  subcategory: administrative_registers
-  dataset: social_security_affiliation_article
-  unit: affiliations
-  frequency: monthly
-  extraction:
-    kind: html_regex
-    value_regex: '(?:si se descuenta la estacionalidad(?: y el efecto calendario)?|serie
-      desestacionalizada|desestacionalizad[oa]s?)[^0-9]{0,180}(?:la afiliación alcanza\s*)?(?P<value>[0-9]{1,3}(?:\.[0-9]{3})+)'
+    kind: social_security_affiliates
 - code: registered_unemployment
   name: Registered unemployment
   description: People registered as unemployed with the public employment services.
@@ -681,14 +668,10 @@ indicators:
   category: pensions
   subcategory: beneficiaries
   dataset: social_security_minimum_supplements
-  unit: pensions
+  unit: people
   frequency: monthly
   extraction:
-    kind: excel_label
-    row_include:
-    - Total
-    column_include:
-    - Número
+    kind: social_security_minimum_supplements
 - code: pensioner_count
   name: Pensioners
   description: Unique people receiving one or more Social Security pensions.
