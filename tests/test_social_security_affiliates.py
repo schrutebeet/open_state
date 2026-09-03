@@ -42,4 +42,4 @@ def test_extracts_totals_for_the_latest_configured_months() -> None:
         ("2026-07", Decimal("22.47")),
         ("2026-06", Decimal("17.00")),
     ]
-    assert observations[0].source_series == "1. EDAD!TOTAL SISTEMA"
+    assert observations[0].source_series == "Tabla_1_5!SUM(SALDOS) BY PERIODO"

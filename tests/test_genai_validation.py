@@ -57,7 +57,8 @@ def test_dataset_13_workbook_evidence_includes_only_tabla_1_5() -> None:
     sheet = workbook.active
     sheet.title = "Tabla_1_5"
     sheet.append(["PERIODO", "SALDOS"])
-    sheet.append(["202607", 22_508_065.43])
+    sheet.append(["202607", 10_000_000])
+    sheet.append(["202607", 12_508_065.43])
     ignored = workbook.create_sheet("Other sheet")
     ignored.append(["must not be sent"])
     buffer = BytesIO()
@@ -76,7 +77,8 @@ def test_dataset_13_workbook_evidence_includes_only_tabla_1_5() -> None:
 
     assert truncated is False
     assert "sheet: Tabla_1_5" in evidence
-    assert "202607" in evidence
+    assert "SUM(SALDOS) grouped by PERIODO" in evidence
+    assert "202607\t22508065.43" in evidence
     assert "Other sheet" not in evidence
     assert "must not be sent" not in evidence
 
@@ -85,7 +87,12 @@ def test_dataset_10_workbook_evidence_includes_only_tax_revenue_sheets() -> None
     workbook = openpyxl.Workbook()
     first = workbook.active
     first.title = "Ingresos tributarios"
-    first.append(["All tax revenue fields"])
+    source_row = [None] * 109
+    source_row[0], source_row[1], source_row[2] = 2026, 6, "JUNIO"
+    source_row[4], source_row[6] = -8_544_316, 13_934_443
+    source_row[29], source_row[65], source_row[107] = 6_022_926, 444_050, 4_381_496
+    source_row[108] = "must not be sent"
+    first.append(source_row)
     ignored = workbook.create_sheet("Other sheet")
     ignored.append(["must not be sent"])
     buffer = BytesIO()
@@ -102,7 +109,8 @@ def test_dataset_10_workbook_evidence_includes_only_tax_revenue_sheets() -> None
 
     evidence, truncated = _payload_evidence(payload, 1_000, dataset_id=10)
 
-    assert "sheet: Ingresos tributarios" in evidence
+    assert "sheet: Ingresos tributarios (structural projection)" in evidence
+    assert "2026\t6\tJUNIO\t-8544316\t13934443\t6022926\t444050\t4381496" in evidence
     assert "Other sheet" not in evidence
     assert "must not be sent" not in evidence
     assert truncated is False
