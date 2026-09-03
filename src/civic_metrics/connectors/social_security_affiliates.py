@@ -82,10 +82,9 @@ class SocialSecurityAffiliatesConnector(HtmlExcelConnector):
                         period=period,
                         value=totals[period_code].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
                         unit=indicator.unit,
-                        source_series="1. EDAD!TOTAL SISTEMA",
+                        source_series=f"{table_sheet}!SUM(SALDOS) BY PERIODO",
                         source_url=payload.source_url,
                         metadata={
-                            "display_sheet": "1. EDAD",
                             "data_sheet": table_sheet,
                             "period_code": period_code,
                             "aggregation": "SUM(SALDOS) grouped by PERIODO",
