@@ -154,8 +154,13 @@ def _payload_evidence(
     source_url = payload.source_url.lower()
     is_workbook = "spreadsheet" in content_type or "excel" in content_type
     if is_workbook or source_url.endswith((".xls", ".xlsx")):
-        sheet_names = _validation_workbook_sheets(dataset_id)
-        rendered = _render_workbook(payload.body, sheet_names=sheet_names)
+        if dataset_id == 10:
+            rendered = _render_aeat_tax_revenue_workbook(payload.body)
+        elif dataset_id == 13:
+            rendered = _render_social_security_affiliates_workbook(payload.body)
+        else:
+            sheet_names = _validation_workbook_sheets(dataset_id)
+            rendered = _render_workbook(payload.body, sheet_names=sheet_names)
     else:
         text = payload.body.decode("utf-8", errors="replace")
         if "json" in content_type:
@@ -187,6 +192,71 @@ def _validation_workbook_sheets(dataset_id: int | None) -> list[str] | None:
     if dataset_id == 13:
         return ["Tabla_1_5"]
     return None
+
+
+def _render_aeat_tax_revenue_workbook(body: bytes) -> str:
+    """Render all usable AEAT monthly records, limited to extracted source columns."""
+    sheet_name = "Ingresos tributarios"
+    frame = pd.read_excel(io.BytesIO(body), sheet_name=sheet_name, header=None)
+    columns = {
+        0: "year",
+        1: "month_number",
+        2: "month_name",
+        4: "tax_refunds_thousand_eur",
+        6: "tax_revenue_total_thousand_eur",
+        29: "tax_revenue_irpf_thousand_eur",
+        65: "tax_revenue_corporate_thousand_eur",
+        107: "tax_revenue_vat_thousand_eur",
+    }
+    numeric = frame.iloc[:, [0, 1, 6]].apply(pd.to_numeric, errors="coerce")
+    populated_months = (
+        numeric.iloc[:, 0].between(1900, 2100)
+        & numeric.iloc[:, 1].between(1, 12)
+        & numeric.iloc[:, 2].notna()
+    )
+    projected = frame.loc[populated_months, list(columns)].rename(columns=columns)
+    rendered = projected.to_csv(index=False, sep="\t", na_rep="")
+    return (
+        f"--- sheet: {sheet_name} (structural projection) ---\n"
+        "All populated monthly rows are retained. The source values are in thousand EUR, "
+        "so divide them by 1,000 to compare with output values in million EUR. "
+        "For tax_refunds only, the source uses a negative accounting sign while the output "
+        "intentionally reports the positive magnitude paid; compare absolute magnitudes.\n"
+        f"{rendered}"
+    )
+
+
+def _render_social_security_affiliates_workbook(body: bytes) -> str:
+    """Render the same monthly aggregation used by the affiliates connector."""
+    sheet_name = "Tabla_1_5"
+    frame = pd.read_excel(io.BytesIO(body), sheet_name=sheet_name)
+    required = {"PERIODO", "SALDOS"}
+    missing = required - set(frame.columns)
+    if missing:
+        raise ValueError(
+            f"Workbook sheet {sheet_name!r} is missing validation columns {sorted(missing)}"
+        )
+    periods = pd.to_numeric(frame["PERIODO"], errors="coerce")
+    values = pd.to_numeric(frame["SALDOS"], errors="coerce")
+    usable = periods.between(200001, 209912) & values.notna()
+    projected = pd.DataFrame(
+        {
+            "period": periods.loc[usable].astype("int64").astype(str),
+            "affiliates": values.loc[usable],
+        }
+    )
+    totals = (
+        projected.groupby("period", as_index=False)["affiliates"]
+        .sum()
+        .sort_values("period", ascending=False)
+    )
+    rendered = totals.to_csv(index=False, sep="\t")
+    return (
+        f"--- sheet: {sheet_name} (connector-equivalent aggregation) ---\n"
+        "Each affiliates value is SUM(SALDOS) grouped by PERIODO across the "
+        "disaggregated source rows. Values are counts of affiliations.\n"
+        f"{rendered}"
+    )
 
 
 def _compact_json(value: Any) -> Any:
