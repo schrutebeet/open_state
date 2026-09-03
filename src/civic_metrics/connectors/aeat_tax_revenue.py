@@ -19,13 +19,15 @@ class AeatTaxRevenueConnector(DirectFileConnector):
     _SHEET_NAME = "Ingresos tributarios"
     _FIELDS: dict[str, tuple[int, Decimal]] = {
         # Zero-based columns in the sheet's "Miles de euros" table.
-        "tax_revenue_total": (6, Decimal("0.000001")),
-        "tax_revenue_irpf": (29, Decimal("0.000001")),
-        "tax_revenue_corporate": (65, Decimal("0.000001")),
-        "tax_revenue_vat": (107, Decimal("0.000001")),
+        # Source values are thousands of euros; divide by 1,000 to obtain
+        # millions of euros.
+        "tax_revenue_total": (6, Decimal("0.001")),
+        "tax_revenue_irpf": (29, Decimal("0.001")),
+        "tax_revenue_corporate": (65, Decimal("0.001")),
+        "tax_revenue_vat": (107, Decimal("0.001")),
         # The source reports paid refunds as a negative amount; this indicator
         # represents the (positive) amount refunded.
-        "tax_refunds": (4, Decimal("-0.000001")),
+        "tax_refunds": (4, Decimal("-0.001")),
     }
 
     def extract(
@@ -83,6 +85,12 @@ class AeatTaxRevenueConnector(DirectFileConnector):
                         "row": row_number,
                         "column": column + 1,
                         "source_unit": "thousand_eur",
+                        "source_value": str(raw_value),
+                        "sign_convention": (
+                            "source_negative_output_positive_amount_refunded"
+                            if indicator.code == "tax_refunds"
+                            else "unchanged"
+                        ),
                     },
                 )
             )
