@@ -1,9 +1,11 @@
-name: Monthly civic data update
+name: Pulso País data update workflow
 
 on:
-  # Runs on the 15th of every month at 04:17 UTC.
+  # Runs on the 15th of every month at 04:17 in mainland Spain.
+  # Europe/Madrid automatically follows CET/CEST daylight-saving changes.
   schedule:
-    - cron: "47 01 3 * *"
+    - cron: "17 4 15 * *"
+      timezone: "Europe/Madrid"
 
   # Also lets you launch and test the workflow manually from GitHub.
   workflow_dispatch:
@@ -24,6 +26,7 @@ jobs:
 
     env:
       PYTHONUNBUFFERED: "1"
+      TZ: Europe/Madrid
       DB_PATH: data/civic_metrics.db
       DATABASE_URL: sqlite+pysqlite:///${{ github.workspace }}/data/civic_metrics.db
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -31,6 +34,8 @@ jobs:
       AWS_DEFAULT_REGION: auto
       R2_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
       R2_PRIVATE_BUCKET: ${{ vars.R2_PRIVATE_BUCKET }}
+      DATACOMEX_USERNAME: ${{ secrets.DATACOMEX_USERNAME }}
+      DATACOMEX_PASSWORD: ${{ secrets.DATACOMEX_PASSWORD }}
 
     steps:
       - name: Check out repository
@@ -54,6 +59,9 @@ jobs:
           test -n "$AWS_SECRET_ACCESS_KEY" || { echo "::error::Missing secret R2_SECRET_ACCESS_KEY"; exit 1; }
           test -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" || { echo "::error::Missing secret CLOUDFLARE_ACCOUNT_ID"; exit 1; }
           test -n "$R2_PRIVATE_BUCKET" || { echo "::error::Missing repository variable R2_PRIVATE_BUCKET"; exit 1; }
+          test -n "$DATACOMEX_USERNAME" || { echo "::error::Missing secret DATACOMEX_USERNAME"; exit 1; }
+          test -n "$DATACOMEX_PASSWORD" || { echo "::error::Missing secret DATACOMEX_PASSWORD"; exit 1; }
+          echo "Spain time: $(date --iso-8601=seconds)"
           aws --version
 
       - name: Prepare data directories
@@ -73,7 +81,9 @@ jobs:
           fi
 
       - name: Run backend
-        run: python main.py
+        # Strict mode returns a non-zero exit code if any required dataset
+        # fails, is incomplete or is skipped, preventing publication to R2.
+        run: python main.py --strict
 
       - name: Verify and checkpoint SQLite database
         run: |
@@ -98,7 +108,7 @@ jobs:
 
       - name: Upload dated database backup to R2
         run: |
-          BACKUP_DATE="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+          BACKUP_DATE="$(date +%Y-%m-%dT%H-%M-%S%z)"
           aws s3 cp \
             "$DB_PATH" \
             "s3://${R2_PRIVATE_BUCKET}/backups/${BACKUP_DATE}/civic_metrics.db" \
