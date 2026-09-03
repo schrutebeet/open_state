@@ -283,28 +283,20 @@ class SepeRegisteredUnemploymentConnector(HtmlExcelConnector):
         if body[:4] == b"PK\x03\x04":
             return openpyxl.load_workbook(BytesIO(body), data_only=True, read_only=True)
 
-        fake_excel = (
-            body.startswith(b'\xff\xff')
-            or body.startswith(b'\xff\xfe')
-            or b'\xd0\xcf\x11\xe0' in body[:8] and b'\xff\xff' in body[:50]
-        )
-
-        if fake_excel:
-            try:
-                df = pd.read_excel(io.BytesIO(body), engine="calamine", header=None, dtype=object)
-                df = df.astype(object).where(pd.notna(df), None)
-                wb = openpyxl.Workbook()
-                ws = wb.active
-                ws.title = "Sheet1"
-                for r in dataframe_to_rows(df, index=False, header=False):
-                    ws.append(r)
-                return wb
-            except Exception as e:
-                raise ValueError("Cannot read this Excel file.")
         else:
             try:
                 file_stream = io.BytesIO(body)
                 workbook = openpyxl.load_workbook(file_stream)
                 return workbook
-            except Exception:
-                raise ValueError("Cannot read this Excel file.")
+            except OSError:
+                try:
+                    df = pd.read_excel(io.BytesIO(body), engine="calamine", header=None, dtype=object)
+                    df = df.astype(object).where(pd.notna(df), None)
+                    wb = openpyxl.Workbook()
+                    ws = wb.active
+                    ws.title = "Sheet1"
+                    for r in dataframe_to_rows(df, index=False, header=False):
+                        ws.append(r)
+                    return wb
+                except Exception:
+                    raise ValueError("Cannot read this Excel file.")
