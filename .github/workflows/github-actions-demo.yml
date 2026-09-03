@@ -1,9 +1,9 @@
-name: Pulso País data update workflow
+name: Monthly civic data update
 
 on:
   # Runs on the 15th of every month at 04:17 UTC.
   schedule:
-    - cron: "41 23 3 * *"
+    - cron: "47 01 3 * *"
 
   # Also lets you launch and test the workflow manually from GitHub.
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
     env:
       PYTHONUNBUFFERED: "1"
       DB_PATH: data/civic_metrics.db
-      CIVIC_METRICS_DATABASE_URL: sqlite+pysqlite:///${{ github.workspace }}/data/civic_metrics.db
+      DATABASE_URL: sqlite+pysqlite:///${{ github.workspace }}/data/civic_metrics.db
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: auto
@@ -41,12 +41,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install .
 
       - name: Check deployment configuration
         run: |
