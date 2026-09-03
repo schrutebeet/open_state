@@ -1,18 +1,126 @@
-name: CI/CD pipeline
-run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
-on: [push]
+name: Pulso País data update workflow
+
+on:
+  # Runs on the 15th of every month at 04:17 UTC.
+  schedule:
+    - cron: "41 23 3 * *"
+
+  # Also lets you launch and test the workflow manually from GitHub.
+  workflow_dispatch:
+
+# Prevent two executions from writing the SQLite database simultaneously.
+concurrency:
+  group: civic-metrics-production-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
-  Explore-GitHub-Actions:
+  update-data:
+    name: Run ingestion and persist SQLite
     runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      DB_PATH: data/civic_metrics.db
+      CIVIC_METRICS_DATABASE_URL: sqlite+pysqlite:///${{ github.workspace }}/data/civic_metrics.db
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      R2_PRIVATE_BUCKET: ${{ vars.R2_PRIVATE_BUCKET }}
+
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Check out repository code
-        uses: actions/checkout@v6
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: List files in the repository
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
         run: |
-          ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Check deployment configuration
+        run: |
+          test -n "$AWS_ACCESS_KEY_ID" || { echo "::error::Missing secret R2_ACCESS_KEY_ID"; exit 1; }
+          test -n "$AWS_SECRET_ACCESS_KEY" || { echo "::error::Missing secret R2_SECRET_ACCESS_KEY"; exit 1; }
+          test -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" || { echo "::error::Missing secret CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+          test -n "$R2_PRIVATE_BUCKET" || { echo "::error::Missing repository variable R2_PRIVATE_BUCKET"; exit 1; }
+          aws --version
+
+      - name: Prepare data directories
+        run: mkdir -p data artifacts
+
+      - name: Restore latest database from R2
+        run: |
+          if aws s3 cp \
+            "s3://${R2_PRIVATE_BUCKET}/current/civic_metrics.db" \
+            "$DB_PATH" \
+            --endpoint-url "$R2_ENDPOINT_URL"; then
+            echo "Restored the current database from R2."
+          elif test -f "$DB_PATH"; then
+            echo "No R2 database found; using the database included in the repository."
+          else
+            echo "No previous database found; the backend will create a new one."
+          fi
+
+      - name: Run backend
+        run: python main.py
+
+      - name: Verify and checkpoint SQLite database
+        run: |
+          python - <<'PY'
+          import os
+          import sqlite3
+          from pathlib import Path
+
+          database = Path(os.environ["DB_PATH"])
+          if not database.is_file() or database.stat().st_size == 0:
+              raise SystemExit(f"Database was not created: {database}")
+
+          with sqlite3.connect(database) as connection:
+              connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+              result = connection.execute("PRAGMA quick_check").fetchone()
+
+          if not result or result[0] != "ok":
+              raise SystemExit(f"SQLite integrity check failed: {result}")
+
+          print(f"SQLite integrity check passed ({database.stat().st_size} bytes).")
+          PY
+
+      - name: Upload dated database backup to R2
+        run: |
+          BACKUP_DATE="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+          aws s3 cp \
+            "$DB_PATH" \
+            "s3://${R2_PRIVATE_BUCKET}/backups/${BACKUP_DATE}/civic_metrics.db" \
+            --endpoint-url "$R2_ENDPOINT_URL"
+
+      - name: Publish current database to R2
+        run: |
+          aws s3 cp \
+            "$DB_PATH" \
+            "s3://${R2_PRIVATE_BUCKET}/current/civic_metrics.db" \
+            --endpoint-url "$R2_ENDPOINT_URL"
+
+      # This copy is useful for debugging and can be downloaded from the
+      # individual workflow run. It is not the persistent production copy.
+      - name: Attach database to workflow run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: civic-metrics-${{ github.run_id }}
+          path: |
+            data/civic_metrics.db
+            data/civic_metrics.db-wal
+            data/civic_metrics.db-shm
+          if-no-files-found: warn
+          retention-days: 30
