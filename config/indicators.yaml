@@ -164,6 +164,8 @@ indicators:
   extraction:
     kind: datacomex_field
     field: Exportación
+    flow_aliases:
+    - exportacion
 - code: goods_imports
   name: Goods imports
   description: Declared value of Spanish merchandise imports from the world.
@@ -175,6 +177,8 @@ indicators:
   extraction:
     kind: datacomex_field
     field: Importación
+    flow_aliases:
+    - importacion
 - code: goods_trade_balance
   name: Goods trade balance
   description: Goods exports minus goods imports.

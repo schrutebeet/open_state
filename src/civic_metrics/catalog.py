@@ -55,6 +55,7 @@ class ExtractionDefinition(BaseModel):
     exclude: list[str] = Field(default_factory=list)
     prefer: list[str] = Field(default_factory=list)
     field: str | None = None
+    flow_aliases: list[str] = Field(default_factory=list)
     series_code: str | None = None
     sheet_include: list[str] = Field(default_factory=list)
     row_include: list[str] = Field(default_factory=list)

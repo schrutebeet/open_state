@@ -4,6 +4,7 @@ import json
 import logging
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlencode
 
 from civic_metrics.catalog import DatasetDefinition, IndicatorDefinition
 from civic_metrics.connectors.base import Connector, ConnectorContext
@@ -48,10 +49,12 @@ class DataComexConnector(Connector):
             "ta": dataset.config.get("taric", "TOTAL"),
             "pr": dataset.config.get("province", "TOTAL"),
         }
+        data_url = f"{dataset.endpoint or self.DATA_URL}?{urlencode({'access_token': token, **params})}"
         response = context.http.get(
-            dataset.endpoint or self.DATA_URL,
-            params=params,
-            headers={"Authorization": f"token_bearer {token}"},
+            data_url,
+            params=None,
+            json_body=None,
+            headers=None,
         )
         return context.http.payload(dataset.code, dataset.source, response, {"query": params})
 
@@ -62,18 +65,23 @@ class DataComexConnector(Connector):
         indicators: list[IndicatorDefinition],
     ) -> list[ObservationCandidate]:
         document = json.loads(payload.body.decode("utf-8-sig"))
-        rows = document if isinstance(document, list) else document.get("data", document.get("result", []))
+        rows = document if isinstance(document, list) else document.get("data", document.get("Resultados", []))
         if not isinstance(rows, list):
             raise ValueError("Unexpected DataComex response structure")
 
         results: list[ObservationCandidate] = []
         for indicator in indicators:
-            expected_flow = normalise_text(indicator.extraction.field)
+            # Indicator codes stay English; aliases accommodate DataComex labels.
+            expected_source_flow = normalise_text(indicator.extraction.field)
+            expected_flows = {
+                expected_source_flow,
+                *(normalise_text(alias) for alias in indicator.extraction.flow_aliases),
+            }
             multiplier = Decimal(indicator.extraction.multiplier)
             matching_rows = [
                 row
                 for row in rows
-                if expected_flow in normalise_text(row.get("flujo", ""))
+                if normalise_text(row.get("flujo", "")) in expected_flows
             ]
             if not matching_rows:
                 LOGGER.warning("No DataComex row found for %s", indicator.code)
@@ -105,10 +113,16 @@ class DataComexConnector(Connector):
 
     @staticmethod
     def _extract_token(document: Any) -> str:
+        def clean(value: Any) -> str:
+            token = str(value).strip().strip('"')
+            if token.lower().startswith("token:"):
+                token = token.split(":", 1)[1]
+            return token.strip()
+
         if isinstance(document, str):
-            return document.strip('"')
+            return clean(document)
         if isinstance(document, dict):
             for key in ("token", "access_token", "Token", "resultado"):
                 if document.get(key):
-                    return str(document[key])
+                    return clean(document[key])
         raise ValueError("Could not find token in DataComex login response")
