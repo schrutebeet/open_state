@@ -34,6 +34,7 @@ jobs:
       AWS_DEFAULT_REGION: auto
       R2_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
       R2_PRIVATE_BUCKET: ${{ vars.R2_PRIVATE_BUCKET }}
+      R2_PUBLIC_BUCKET: ${{ vars.R2_PUBLIC_BUCKET }}
       DATACOMEX_USERNAME: ${{ secrets.DATACOMEX_USERNAME }}
       DATACOMEX_PASSWORD: ${{ secrets.DATACOMEX_PASSWORD }}
 
@@ -59,6 +60,7 @@ jobs:
           test -n "$AWS_SECRET_ACCESS_KEY" || { echo "::error::Missing secret R2_SECRET_ACCESS_KEY"; exit 1; }
           test -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" || { echo "::error::Missing secret CLOUDFLARE_ACCOUNT_ID"; exit 1; }
           test -n "$R2_PRIVATE_BUCKET" || { echo "::error::Missing repository variable R2_PRIVATE_BUCKET"; exit 1; }
+          test -n "$R2_PUBLIC_BUCKET" || { echo "::error::Missing repository variable R2_PUBLIC_BUCKET"; exit 1; }
           test -n "$DATACOMEX_USERNAME" || { echo "::error::Missing secret DATACOMEX_USERNAME"; exit 1; }
           test -n "$DATACOMEX_PASSWORD" || { echo "::error::Missing secret DATACOMEX_PASSWORD"; exit 1; }
           echo "Spain time: $(date --iso-8601=seconds)"
@@ -105,6 +107,18 @@ jobs:
 
           print(f"SQLite integrity check passed ({database.stat().st_size} bytes).")
           PY
+
+      - name: Export frontend-safe JSON snapshot
+        run: python scripts/export_dashboard.py --database "$DB_PATH" --output public/dashboard.json
+
+      - name: Publish dashboard JSON to public R2 bucket
+        run: |
+          aws s3 cp \
+            public/dashboard.json \
+            "s3://${R2_PUBLIC_BUCKET}/v1/dashboard.json" \
+            --endpoint-url "$R2_ENDPOINT_URL" \
+            --content-type "application/json; charset=utf-8" \
+            --cache-control "public, max-age=300, stale-while-revalidate=86400"
 
       - name: Upload dated database backup to R2
         run: |
