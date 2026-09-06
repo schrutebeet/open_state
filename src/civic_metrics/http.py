@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -42,6 +43,18 @@ class HttpClient:
 
     def close(self) -> None:
         self._client.close()
+
+    @staticmethod
+    def _public_url(url: str) -> str:
+        parts = urlsplit(url)
+        query = [
+            (key, value)
+            for key, value in parse_qsl(parts.query, keep_blank_values=True)
+            if key.lower() not in {"access_token", "token"}
+        ]
+        return urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
+        )
 
     def _key(
         self,
@@ -88,7 +101,7 @@ class HttpClient:
                 response.raise_for_status()
                 return CachedResponse(
                     body=response.content,
-                    source_url=str(response.url),
+                    source_url=self._public_url(str(response.url)),
                     content_type=response.headers.get(
                         "content-type", "application/octet-stream"
                     ).split(";")[0],
