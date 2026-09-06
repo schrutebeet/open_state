@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from civic_metrics.domain import ObservationCandidate
@@ -28,12 +28,33 @@ def save_observation(
                 Observation.geography == candidate.geography,
                 Observation.source_code == candidate.source_code,
                 Observation.dataset_code == candidate.dataset_code,
-                Observation.source_series == candidate.source_series,
-                Observation.value == candidate.value,
+                (
+                    or_(
+                        Observation.source_series == candidate.source_series,
+                        Observation.source_series.is_(None),
+                    )
+                    if candidate.source_series is not None
+                    else Observation.source_series.is_(None)
+                ),
             )
-        )
+        ).order_by(Observation.retrieved_at.desc(), Observation.id.desc())
     )
     if existing is not None:
+        existing.raw_artifact_id = artifact.id if artifact else existing.raw_artifact_id
+        existing.period_label = candidate.period.label
+        existing.frequency = candidate.period.frequency
+        existing.value = candidate.value
+        existing.unit = candidate.unit
+        existing.status = candidate.status
+        existing.is_provisional = candidate.is_provisional
+        existing.source_url = candidate.source_url
+        existing.published_at = candidate.published_at
+        existing.retrieved_at = datetime.now(timezone.utc)
+        existing.metadata_json = {
+            **candidate.metadata,
+            "source_code": candidate.source_code,
+            "dataset_code": candidate.dataset_code,
+        }
         return existing
 
     observation = Observation(
