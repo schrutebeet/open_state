@@ -71,16 +71,32 @@ jobs:
 
       - name: Restore latest database from R2
         run: |
-          if aws s3 cp \
+          aws s3 cp \
             "s3://${R2_PRIVATE_BUCKET}/current/civic_metrics.db" \
             "$DB_PATH" \
-            --endpoint-url "$R2_ENDPOINT_URL"; then
-            echo "Restored the current database from R2."
-          elif test -f "$DB_PATH"; then
-            echo "No R2 database found; using the database included in the repository."
-          else
-            echo "No previous database found; the backend will create a new one."
-          fi
+            --endpoint-url "$R2_ENDPOINT_URL"
+          echo "Restored the current database from R2."
+
+      - name: Verify restored database history
+        run: |
+          python - <<'PY'
+          import os
+          import sqlite3
+
+          database = os.environ["DB_PATH"]
+          with sqlite3.connect(database) as connection:
+              observations = connection.execute(
+                  "SELECT COUNT(*) FROM observations"
+              ).fetchone()[0]
+              indicators = connection.execute(
+                  "SELECT COUNT(*) FROM indicators"
+              ).fetchone()[0]
+
+          print(f"Restored database: {observations} observations, {indicators} indicators")
+          if observations < 1:
+              raise SystemExit("Refusing to continue: restored database is empty")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write(f"RESTORED_OBSERVATIONS={observations}\n")
 
       - name: Run backend
         # Strict mode returns a non-zero exit code if any required dataset
@@ -101,11 +117,22 @@ jobs:
           with sqlite3.connect(database) as connection:
               connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
               result = connection.execute("PRAGMA quick_check").fetchone()
+              observations = connection.execute(
+                "SELECT COUNT(*) FROM observations"
+              ).fetchone()[0]
 
           if not result or result[0] != "ok":
               raise SystemExit(f"SQLite integrity check failed: {result}")
+          if observations < int(os.environ["RESTORED_OBSERVATIONS"]):
+              raise SystemExit(
+                  "SQLite observation count decreased after ingestion: "
+                  f"{observations} < {os.environ['RESTORED_OBSERVATIONS']}"
+              )
 
-          print(f"SQLite integrity check passed ({database.stat().st_size} bytes).")
+          print(
+              f"SQLite integrity check passed ({database.stat().st_size} bytes, "
+              f"{observations} observations)."
+          )
           PY
 
       - name: Export frontend-safe JSON snapshot
