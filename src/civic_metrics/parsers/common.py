@@ -53,30 +53,74 @@ def normalise_text(value: Any) -> str:
 
 def parse_decimal(value: Any) -> Decimal:
     if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise ValueError(f"Cannot parse non-finite numeric value from {value!r}")
         return value
     if isinstance(value, (int, float)):
-        return Decimal(str(value))
+        parsed = Decimal(str(value))
+        if not parsed.is_finite():
+            raise ValueError(f"Cannot parse non-finite numeric value from {value!r}")
+        return parsed
+
     text = str(value).strip().replace("\u00a0", " ")
-    text = re.sub(r"[^0-9,.-]", "", text)
     if not text:
         raise ValueError(f"Cannot parse numeric value from {value!r}")
-    if "," in text and "." in text:
-        if text.rfind(",") > text.rfind("."):
-            text = text.replace(".", "").replace(",", ".")
-        else:
-            text = text.replace(",", "")
-    elif "," in text:
-        tail = text.rsplit(",", 1)[-1]
-        text = text.replace(".", "")
-        text = text.replace(",", "." if len(tail) <= 3 else "")
+
+    sign = ""
+    if text[:1] in {"+", "-"}:
+        sign, text = text[0], text[1:].strip()
+    if text[:1] in {"+", "-"} or not text:
+        raise ValueError(f"Invalid numeric value {value!r}")
+
+    if any(char not in "0123456789., " for char in text):
+        raise ValueError(f"Invalid numeric value {value!r}")
+
+    if " " in text:
+        space_parts = text.split(" ")
+        if any(not part for part in space_parts):
+            raise ValueError(f"Invalid numeric grouping in {value!r}")
+        text = "".join(space_parts)
+
+    separators = {separator for separator in ",." if separator in text}
+    if not separators:
+        normalised = text
+    elif len(separators) == 2:
+        decimal_separator = "," if text.rfind(",") > text.rfind(".") else "."
+        grouping_separator = "." if decimal_separator == "," else ","
+        integer_part, fractional_part = text.rsplit(decimal_separator, 1)
+        if not fractional_part.isdigit() or grouping_separator in fractional_part:
+            raise ValueError(f"Invalid decimal value {value!r}")
+        if not _valid_grouped_integer(integer_part, grouping_separator):
+            raise ValueError(f"Invalid numeric grouping in {value!r}")
+        normalised = integer_part.replace(grouping_separator, "") + "." + fractional_part
     else:
-        parts = text.split(".")
-        if len(parts) > 2 or (len(parts) == 2 and len(parts[-1]) == 3):
-            text = "".join(parts)
+        separator = next(iter(separators))
+        parts = text.split(separator)
+        if len(parts) == 2:
+            if len(parts[1]) == 3:
+                raise ValueError(f"Ambiguous numeric value {value!r}")
+            if not parts[0].isdigit() or not parts[1].isdigit():
+                raise ValueError(f"Invalid decimal value {value!r}")
+            normalised = ".".join(parts)
+        elif _valid_grouped_integer(text, separator):
+            normalised = text.replace(separator, "")
+        else:
+            raise ValueError(f"Invalid numeric grouping in {value!r}")
+
     try:
-        return Decimal(text)
+        return Decimal(sign + normalised)
     except InvalidOperation as exc:
         raise ValueError(f"Cannot parse numeric value from {value!r}") from exc
+
+
+def _valid_grouped_integer(text: str, separator: str) -> bool:
+    parts = text.split(separator)
+    return (
+        len(parts) > 1
+        and 1 <= len(parts[0]) <= 3
+        and parts[0].isdigit()
+        and all(len(part) == 3 and part.isdigit() for part in parts[1:])
+    )
 
 
 def period_from_datetime(
