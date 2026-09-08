@@ -58,7 +58,7 @@ datasets:
   connector: ine_table
   endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
   config:
-    table_id: 76115
+    table_id: 76130
     nult: 18
 - code: ine_youth_unemployment
   source: ine
@@ -76,17 +76,20 @@ datasets:
     nult: 12
 - code: ine_epa_summary
   source: ine
-  connector: html_table
-  endpoint: https://www.ine.es/prensa/epa_tabla.htm
+  connector: ine_table
+  endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
   config:
-    table_index: 0
-    period_column: 0
+    indicator_tables:
+      labour_force: 65078
+      employed_people: 65078
+      unemployed_people: 65078
+      unemployment_rate: 65219
+      activity_rate: 65081
 - code: bde_public_debt
   source: bde
   connector: bde_series
   endpoint: https://app.bde.es/bierest/resources/srdatosapp/listaSeries
   config:
-    range: 60M
     series:
     - DTNPDE2010_P00000_PS_APU
     - DTNPDE2010_F20000_PS_APU
@@ -121,6 +124,8 @@ datasets:
   connector: igae_state_budget_execution
   endpoint: https://www.igae.pap.hacienda.gob.es/sitios/igae/es-ES/Contabilidad/ContabilidadPublica/CPE/EjecucionPresupuestaria/Paginas/imextractoejecucion.aspx
   config:
+    historical_files: true
+    archive_link_pattern: 'imextractoejecucion20\d{2}\.aspx$'
     link_include:
     - Cuadros
     extensions:
@@ -131,6 +136,7 @@ datasets:
   connector: social_security_affiliates
   endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/EST8/EST10/EST290/EST291
   config:
+    historical_files: true
     link_include:
     - Afiliados Medios
     extensions:
@@ -140,18 +146,26 @@ datasets:
 - code: social_security_pension_series
   source: social_security
   connector: social_security_pensions
-  endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/est23/est24
+  endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/EST23/2575
   config:
+    historical_files: true
+    historical_year_tree: true
+    historical_navigation:
+    - Pensiones contributivas en vigor
+    - Pensiones por CCAA y provincias
     link_include:
-    - Series de pensiones en vigor
+    - Pensiones por CCAA y provincias
     extensions:
     - .xlsx
     - .xls
+    data_sheet: CA_Total sistema
 - code: social_security_pension_payroll
   source: social_security
   connector: social_security_pensions
   endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/est23/est24
   config:
+    historical_files: true
+    generate_historical_files: true
     link_include:
     - Importe n.mina por conceptos
     extensions:
@@ -172,6 +186,8 @@ datasets:
   connector: social_security_minimum_supplements
   endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/est23/est24
   config:
+    historical_files: true
+    generate_historical_files: true
     link_include:
     - Con complemento a m.nimos
     extensions:
@@ -183,6 +199,8 @@ datasets:
   connector: social_security_pensions
   endpoint: https://www.seg-social.es/wps/portal/wss/internet/EstadisticasPresupuestosEstudios/Estadisticas/EST23/26bce586-014b-4c4e-9484-009cee21e271
   config:
+    historical_files: true
+    historical_year_tree: true
     link_include:
     - Pensionistas
     extensions:

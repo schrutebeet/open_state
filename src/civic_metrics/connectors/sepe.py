@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from zipfile import BadZipFile
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
@@ -101,10 +102,7 @@ class SepeRegisteredUnemploymentConnector(HtmlExcelConnector):
 
         today = date.today()
 
-        # We try years from newest to oldest. This also handles a workbook
-        # containing a future year block whose cells are still empty.
-        selected: tuple[int, int, int, int, Decimal] | None = None
-
+        available: list[tuple[int, int, int, int, Decimal]] = []
         for year in sorted(year_columns, reverse=True):
             value_column = year_columns[year]
             populated_months: list[tuple[int, int, Decimal]] = []
@@ -152,83 +150,44 @@ class SepeRegisteredUnemploymentConnector(HtmlExcelConnector):
                     (row_number, month, value)
                 )
 
-            if populated_months:
-                # Select by month number, not by physical row order.
-                row_number, month, value = max(
-                    populated_months,
-                    key=lambda item: item[1],
-                )
+            available.extend(
+                (year, value_column, row_number, month, value)
+                for row_number, month, value in populated_months
+            )
 
-                selected = (
-                    year,
-                    value_column,
-                    row_number,
-                    month,
-                    value,
-                )
-                break
-
-        if selected is None:
+        if not available:
             raise LookupError(
                 "No populated monthly unemployment value found "
                 "in the SEPE workbook"
             )
 
-        (
-            latest_year,
-            value_column,
-            row_number,
-            month,
-            value,
-        ) = selected
-
-        period = Period(
-            start=date(latest_year, month, 1),
-            end=date(
-                latest_year,
-                month,
-                calendar.monthrange(latest_year, month)[1],
-            ),
-            label=f"{latest_year}-{month:02d}",
-            frequency="monthly",
-        )
-
         results: list[ObservationCandidate] = []
-
-        for indicator in indicators:
-            if indicator.code != "registered_unemployment":
-                continue
-
-            results.append(
-                ObservationCandidate(
-                    indicator_code=indicator.code,
-                    source_code=dataset.source,
-                    dataset_code=dataset.code,
-                    period=period,
-                    value=value,
-                    unit=indicator.unit,
-                    source_series=(
-                        f"{sheet.title}!"
-                        f"R{row_number}C{value_column}"
-                    ),
-                    source_url=payload.source_url,
-                    metadata={
-                        "listing_url": payload.metadata.get(
-                            "listing_url"
-                        ),
-                        "selected_link_text": payload.metadata.get(
-                            "selected_link_text"
-                        ),
-                        "parser": (
-                            "sepe_registered_unemployment_v2"
-                        ),
-                        "year": latest_year,
-                        "month": month,
-                        "excel_row": row_number,
-                        "excel_column": value_column,
-                    },
-                )
+        history_periods = int(payload.metadata.get("history_periods", 12))
+        for latest_year, value_column, row_number, month, value in sorted(
+            available, key=lambda item: (item[0], item[3])
+        )[-history_periods:]:
+            period = Period(
+                start=date(latest_year, month, 1),
+                end=date(latest_year, month, calendar.monthrange(latest_year, month)[1]),
+                label=f"{latest_year}-{month:02d}",
+                frequency="monthly",
             )
+            for indicator in indicators:
+                if indicator.code != "registered_unemployment":
+                    continue
+                results.append(
+                    ObservationCandidate(
+                        indicator_code=indicator.code,
+                        source_code=dataset.source,
+                        dataset_code=dataset.code,
+                        period=period,
+                        value=value,
+                        unit=indicator.unit,
+                        source_series=f"{sheet.title}!R{row_number}C{value_column}",
+                        source_url=payload.source_url,
+                        metadata={"year": latest_year, "month": month},
+                    )
+                )
 
         return results
 
@@ -288,7 +247,7 @@ class SepeRegisteredUnemploymentConnector(HtmlExcelConnector):
                 file_stream = io.BytesIO(body)
                 workbook = openpyxl.load_workbook(file_stream)
                 return workbook
-            except OSError:
+            except (BadZipFile, OSError, ValueError):
                 try:
                     df = pd.read_excel(io.BytesIO(body), engine="calamine", header=None, dtype=object)
                     df = df.astype(object).where(pd.notna(df), None)

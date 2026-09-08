@@ -47,57 +47,51 @@ class AeatTaxRevenueConnector(DirectFileConnector):
         if rows is None:
             raise LookupError(f"Worksheet {table_sheet!r} was not found")
 
-        latest = self._latest_available_row(rows)
-        if latest is None:
+        available = self._available_rows(rows)
+        if not available:
             raise LookupError(f"No populated monthly data rows found in {table_sheet!r}")
-        row_number, period, row = latest
+        selected_rows = available[-int(payload.metadata.get("history_periods", 12)):]
 
         results: list[ObservationCandidate] = []
-        for indicator in indicators:
-            field = self._FIELDS.get(indicator.code)
-            if field is None:
-                LOGGER.warning("No AEAT tax revenue field configured for %s", indicator.code)
-                continue
-            column, multiplier = field
-            try:
-                raw_value = parse_decimal(row[column])
-            except (IndexError, TypeError, ValueError):
-                LOGGER.warning(
-                    "No numeric value for %s in %s row %s column %s",
-                    indicator.code,
-                    table_sheet,
-                    row_number,
-                    column + 1,
+        for row_number, period, row in selected_rows:
+            for indicator in indicators:
+                field = self._FIELDS.get(indicator.code)
+                if field is None:
+                    LOGGER.warning("No AEAT tax revenue field configured for %s", indicator.code)
+                    continue
+                column, multiplier = field
+                try:
+                    raw_value = parse_decimal(row[column])
+                except (IndexError, TypeError, ValueError):
+                    continue
+                results.append(
+                    ObservationCandidate(
+                        indicator_code=indicator.code,
+                        source_code=dataset.source,
+                        dataset_code=dataset.code,
+                        period=period,
+                        value=raw_value * multiplier,
+                        unit=indicator.unit,
+                        source_series=f"{table_sheet}!R{row_number}C{column + 1}",
+                        source_url=payload.source_url,
+                        metadata={
+                            "sheet": table_sheet,
+                            "row": row_number,
+                            "column": column + 1,
+                            "source_unit": "thousand_eur",
+                            "source_value": str(raw_value),
+                            "sign_convention": (
+                                "source_negative_output_positive_amount_refunded"
+                                if indicator.code == "tax_refunds"
+                                else "unchanged"
+                            ),
+                        },
+                    )
                 )
-                continue
-            results.append(
-                ObservationCandidate(
-                    indicator_code=indicator.code,
-                    source_code=dataset.source,
-                    dataset_code=dataset.code,
-                    period=period,
-                    value=raw_value * multiplier,
-                    unit=indicator.unit,
-                    source_series=f"{table_sheet}!R{row_number}C{column + 1}",
-                    source_url=payload.source_url,
-                    metadata={
-                        "sheet": table_sheet,
-                        "row": row_number,
-                        "column": column + 1,
-                        "source_unit": "thousand_eur",
-                        "source_value": str(raw_value),
-                        "sign_convention": (
-                            "source_negative_output_positive_amount_refunded"
-                            if indicator.code == "tax_refunds"
-                            else "unchanged"
-                        ),
-                    },
-                )
-            )
         return results
 
     @staticmethod
-    def _latest_available_row(rows: list[list[object]]) -> tuple[int, object, list[object]] | None:
+    def _available_rows(rows: list[list[object]]) -> list[tuple[int, object, list[object]]]:
         candidates: list[tuple[int, object, list[object]]] = []
         for row_index, row in enumerate(rows):
             try:
@@ -109,4 +103,4 @@ class AeatTaxRevenueConnector(DirectFileConnector):
             except (IndexError, TypeError, ValueError):
                 continue
             candidates.append((row_index + 1, period, row))
-        return max(candidates, key=lambda item: item[1].end) if candidates else None
+        return sorted(candidates, key=lambda item: item[1].end)

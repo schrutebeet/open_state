@@ -44,12 +44,29 @@ class DerivedIndicatorEngine:
         self.session = session
 
     def materialise(self, definition: IndicatorDefinition) -> Observation | None:
+        results = self.materialise_history(definition, 1)
+        return results[-1] if results else None
+
+    def materialise_history(
+        self, definition: IndicatorDefinition, limit: int
+    ) -> list[Observation]:
+        """Materialise the newest ``limit`` periods, not only the latest row."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        target_ends = self._target_period_ends(definition.dependencies, limit)
+        observations: list[Observation] = []
+        for target_end in target_ends:
+            result = self.evaluate(definition, target_end=target_end)
+            if result is None:
+                continue
+            observation = self._save_result(definition, result)
+            observations.append(observation)
+        self.session.flush()
+        return observations
+
+    def _save_result(self, definition: IndicatorDefinition, result: EvaluationResult) -> Observation:
         if not definition.formula:
             raise FormulaError(f"Indicator {definition.code} has no formula")
-        result = self.evaluate(definition)
-        if result is None:
-            return None
-
         dependency_signature = hashlib.sha256(
             ",".join(str(item.id) for item in result.dependencies).encode("ascii")
         ).hexdigest()[:16]
@@ -73,8 +90,10 @@ class DerivedIndicatorEngine:
         self.session.flush()
         return observation
 
-    def evaluate(self, definition: IndicatorDefinition) -> EvaluationResult | None:
-        target = self._target_observation(definition.dependencies)
+    def evaluate(
+        self, definition: IndicatorDefinition, target_end: date | None = None
+    ) -> EvaluationResult | None:
+        target = self._target_observation(definition.dependencies, target_end)
         if target is None:
             return None
         target_period = Period(
@@ -99,12 +118,18 @@ class DerivedIndicatorEngine:
         unique = {item.id: item for item in dependencies}
         return EvaluationResult(value=value, dependencies=tuple(unique.values()), period=target_period)
 
-    def _target_observation(self, dependency_codes: list[str]) -> Observation | None:
+    def _target_observation(
+        self, dependency_codes: list[str], target_end: date | None = None
+    ) -> Observation | None:
         if not dependency_codes:
             raise FormulaError("A derived indicator requires at least one dependency")
         latest_by_dependency: list[Observation] = []
         for code in dependency_codes:
-            row = self._latest(code)
+            row = (
+                self._observation_at_or_before(code, target_end)
+                if target_end is not None
+                else self._latest(code)
+            )
             if row is None:
                 return None
             latest_by_dependency.append(row)
@@ -115,6 +140,28 @@ class DerivedIndicatorEngine:
             (item for item in latest_by_dependency if item.period_end <= target_end),
             key=lambda item: item.period_end,
         )
+
+    def _target_period_ends(self, dependency_codes: list[str], limit: int) -> list[date]:
+        if not dependency_codes:
+            raise FormulaError("A derived indicator requires at least one dependency")
+        rows = list(
+            self.session.scalars(
+                select(Observation)
+                .join(Indicator)
+                .where(Indicator.code == dependency_codes[0])
+                .order_by(Observation.period_end.desc(), Observation.retrieved_at.desc())
+            )
+        )
+        distinct: list[date] = []
+        seen: set[date] = set()
+        for row in rows:
+            if row.period_end in seen:
+                continue
+            seen.add(row.period_end)
+            distinct.append(row.period_end)
+            if len(distinct) >= limit:
+                break
+        return list(reversed(distinct))
 
     def _evaluate_node(
         self,

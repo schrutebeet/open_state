@@ -34,47 +34,48 @@ class IgaeQuarterlyAccountsConnector(DirectFileConnector):
         payload: DatasetPayload,
         indicators: list[IndicatorDefinition],
     ) -> list[ObservationCandidate]:
-        workbook = openpyxl.load_workbook(BytesIO(payload.body), data_only=True, read_only=True)
-        if "Tabla1a" not in workbook.sheetnames:
-            raise LookupError(f"Expected sheet 'Tabla1a'; found {workbook.sheetnames}")
-        sheet = workbook["Tabla1a"]
-        column, year, quarter = self._latest_populated_quarter(sheet)
-        period = self._quarter_period(year, quarter)
-        row_by_indicator = {
-            code: self._find_row(sheet, term) for code, term in self._ROW_TERMS.items()
-        }
+        # This parser performs random cell access while resolving labels and
+        # quarter columns.  ``read_only`` replays the XML stream for every
+        # random access and makes the extraction appear to hang on real books.
+        workbook = openpyxl.load_workbook(BytesIO(payload.body), data_only=True)
+        try:
+            if "Tabla1a" not in workbook.sheetnames:
+                raise LookupError(f"Expected sheet 'Tabla1a'; found {workbook.sheetnames}")
+            sheet = workbook["Tabla1a"]
+            columns = self._populated_quarters(sheet)
+            history_periods = int(payload.metadata.get("history_periods", 12))
+            selected = columns[-history_periods:]
+            row_by_indicator = {
+                code: self._find_row(sheet, term) for code, term in self._ROW_TERMS.items()
+            }
 
-        results: list[ObservationCandidate] = []
-        for indicator in indicators:
-            row = row_by_indicator.get(indicator.code)
-            if row is None:
-                continue
-            value = parse_decimal(sheet.cell(row, column).value)
-            results.append(
-                ObservationCandidate(
-                    indicator_code=indicator.code,
-                    source_code=dataset.source,
-                    dataset_code=dataset.code,
-                    period=period,
-                    value=value,
-                    unit=indicator.unit,
-                    source_series=f"Tabla1a!R{row}C{column}",
-                    source_url=payload.source_url,
-                    metadata={
-                        "sheet": "Tabla1a",
-                        "row": row,
-                        "column": column,
-                        "year": year,
-                        "quarter": quarter,
-                        "parser": "igae_quarterly_accounts_v1",
-                        "source_unit": "million_eur",
-                    },
-                )
-            )
-        return results
+            results: list[ObservationCandidate] = []
+            for column, year, quarter in selected:
+                period = self._quarter_period(year, quarter)
+                for indicator in indicators:
+                    row = row_by_indicator.get(indicator.code)
+                    if row is None:
+                        continue
+                    value = parse_decimal(sheet.cell(row, column).value)
+                    results.append(
+                        ObservationCandidate(
+                            indicator_code=indicator.code,
+                            source_code=dataset.source,
+                            dataset_code=dataset.code,
+                            period=period,
+                            value=value,
+                            unit=indicator.unit,
+                            source_series=f"Tabla1a!R{row}C{column}",
+                            source_url=payload.source_url,
+                            metadata={"sheet": "Tabla1a", "row": row, "column": column},
+                        )
+                    )
+            return results
+        finally:
+            workbook.close()
 
     @classmethod
-    def _latest_populated_quarter(cls, sheet: Worksheet) -> tuple[int, int, int]:
+    def _populated_quarters(cls, sheet: Worksheet) -> list[tuple[int, int, int]]:
         current_year: int | None = None
         candidates: list[tuple[int, int, int]] = []
         key_rows = [cls._find_row(sheet, term) for term in cls._ROW_TERMS.values()]
@@ -93,8 +94,10 @@ class IgaeQuarterlyAccountsConnector(DirectFileConnector):
                 candidates.append((current_year, quarter, column))
         if not candidates:
             raise LookupError("No populated IGAE quarterly column found")
-        year, quarter, column = max(candidates, key=lambda item: (item[0], item[1]))
-        return column, year, quarter
+        return [
+            (column, year, quarter)
+            for year, quarter, column in sorted(candidates, key=lambda item: (item[0], item[1]))
+        ]
 
     @staticmethod
     def _find_row(sheet: Worksheet, term: str) -> int:
@@ -137,7 +140,13 @@ class IgaeStateBudgetExecutionConnector(HtmlExcelConnector):
         payload: DatasetPayload,
         indicators: list[IndicatorDefinition],
     ) -> list[ObservationCandidate]:
-        workbook = openpyxl.load_workbook(BytesIO(payload.body), data_only=True, read_only=True)
+        workbook = openpyxl.load_workbook(BytesIO(payload.body), data_only=True)
+        try:
+            return self._extract_workbook(dataset, payload, indicators, workbook)
+        finally:
+            workbook.close()
+
+    def _extract_workbook(self, dataset, payload, indicators, workbook):
         required = {"ING 002", "GTOS 001", "GTOS 004"}
         missing = required - set(workbook.sheetnames)
         if missing:

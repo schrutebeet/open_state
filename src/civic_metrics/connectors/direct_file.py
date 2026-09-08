@@ -26,5 +26,6 @@ class DirectFileConnector(HtmlExcelConnector):
             {
                 "listing_url": dataset.config.get("source_page"),
                 "selected_link_text": dataset.config.get("period_hint", ""),
+                "history_periods": context.settings.lookback_period,
             },
         )

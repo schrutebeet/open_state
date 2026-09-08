@@ -30,7 +30,7 @@ def _payload(dataset_code: str, source_code: str, filename: str) -> DatasetPaylo
     )
 
 
-def test_igae_quarterly_accounts_uses_latest_populated_quarter() -> None:
+def test_igae_quarterly_accounts_retains_populated_quarters() -> None:
     catalog = load_catalog(Path("config"))
     dataset = catalog.dataset_by_code["igae_quarterly_non_financial_accounts"]
     indicators = [item for item in catalog.indicators if item.dataset == dataset.code]
@@ -43,7 +43,10 @@ def test_igae_quarterly_accounts_uses_latest_populated_quarter() -> None:
     assert values["general_government_revenue"].value == 172627
     assert values["general_government_expenditure"].value == 179057
     assert values["general_government_balance"].value == -6430
-    assert {item.period.label for item in results} == {"2026-Q1"}
+    assert {item.period.label for item in results} == {
+        "2023-Q2", "2023-Q3", "2023-Q4", "2024-Q1", "2024-Q2", "2024-Q3",
+        "2024-Q4", "2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4", "2026-Q1",
+    }
 
 
 def test_igae_budget_execution_converts_thousands_to_millions() -> None:

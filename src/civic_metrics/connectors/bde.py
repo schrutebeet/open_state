@@ -30,14 +30,16 @@ class BdeSeriesConnector(Connector):
             params={
                 "idioma": "es",
                 "series": ",".join(series),
-                "rango": dataset.config.get("range", "30Q"),
+                # BdE only accepts predefined ranges. Keep the complete series;
+                # LOOKBACK_PERIOD is applied by the snapshot and JSON export.
+                "rango": "MAX",
             },
         )
         return context.http.payload(
             dataset.code,
             dataset.source,
             response,
-            {"series_requested": series},
+            {"series_requested": series, "range_requested": "MAX"},
         )
 
     def extract(

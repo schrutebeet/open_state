@@ -8,7 +8,7 @@ from io import BytesIO
 import openpyxl
 
 from civic_metrics.catalog import DatasetDefinition, IndicatorDefinition
-from civic_metrics.connectors.base import ConnectorContext
+from civic_metrics.connectors.base import ConnectorContext, lookback_periods
 from civic_metrics.connectors.html_excel import HtmlExcelConnector
 from civic_metrics.domain import DatasetPayload, ObservationCandidate
 from civic_metrics.parsers.common import period_from_label
@@ -26,7 +26,7 @@ class SocialSecurityAffiliatesConnector(HtmlExcelConnector):
             metadata={
                 **payload.metadata,
                 "history_periods": int(
-                    dataset.config.get("history_periods", context.settings.max_history_periods)
+                    lookback_periods(context, "monthly")
                 ),
             },
         )

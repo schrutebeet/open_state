@@ -147,7 +147,7 @@ indicators:
   subcategory: prices
   dataset: ine_cpi_special_groups
   unit: percent
-  frequency: annual
+  frequency: monthly
   extraction:
     kind: ine_series
     include:
@@ -494,8 +494,8 @@ indicators:
   unit: people
   frequency: quarterly
   extraction:
-    kind: html_table_field
-    field: Activos
+    kind: ine_series
+    series_code: EPA387794
     multiplier: '1000'
 - code: employed_people
   name: Employed people
@@ -506,8 +506,8 @@ indicators:
   unit: people
   frequency: quarterly
   extraction:
-    kind: html_table_field
-    field: Ocupados
+    kind: ine_series
+    series_code: EPA387796
     multiplier: '1000'
 - code: unemployed_people
   name: Unemployed people
@@ -518,8 +518,8 @@ indicators:
   unit: people
   frequency: quarterly
   extraction:
-    kind: html_table_field
-    field: Parados
+    kind: ine_series
+    series_code: EPA387800
     multiplier: '1000'
 - code: unemployment_rate
   name: Unemployment rate
@@ -530,8 +530,8 @@ indicators:
   unit: percent
   frequency: quarterly
   extraction:
-    kind: html_table_field
-    field: Tasa de paro
+    kind: ine_series
+    series_code: EPA423474
 - code: activity_rate
   name: Activity rate
   description: Labour force as a percentage of the working-age population.
@@ -541,8 +541,8 @@ indicators:
   unit: percent
   frequency: quarterly
   extraction:
-    kind: html_table_field
-    field: Tasa de actividad
+    kind: ine_series
+    series_code: EPA388079
 - code: youth_unemployment_rate
   name: Unemployment rate, ages 20 to 24
   description: Unemployment rate for people aged 20 to 24, both sexes. The INE table

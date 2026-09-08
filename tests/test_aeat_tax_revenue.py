@@ -50,22 +50,27 @@ def test_extracts_latest_populated_monthly_net_tax_revenue() -> None:
 
     observations = AeatTaxRevenueConnector().extract(dataset, payload, indicators)
 
-    assert [(item.indicator_code, item.value) for item in observations] == [
+    latest = [item for item in observations if item.period.label == "2026-06"]
+    assert [(item.indicator_code, item.value) for item in latest] == [
         ("tax_revenue_total", Decimal("13934.443")),
         ("tax_revenue_irpf", Decimal("6022.926")),
         ("tax_revenue_vat", Decimal("4381.496")),
         ("tax_revenue_corporate", Decimal("444.050")),
         ("tax_refunds", Decimal("8544.316")),
     ]
-    assert {item.period.label for item in observations} == {"2026-06"}
-    assert {item.source_series for item in observations} == {
+    assert {item.period.label for item in observations} == {"2026-05", "2026-06"}
+    assert {item.source_series for item in latest} == {
         "Ingresos tributarios!R3C7",
         "Ingresos tributarios!R3C30",
         "Ingresos tributarios!R3C66",
         "Ingresos tributarios!R3C108",
         "Ingresos tributarios!R3C5",
     }
-    refunds = next(item for item in observations if item.indicator_code == "tax_refunds")
+    refunds = next(
+        item
+        for item in latest
+        if item.indicator_code == "tax_refunds"
+    )
     assert refunds.metadata["source_value"] == "-8544316"
     assert refunds.metadata["sign_convention"] == (
         "source_negative_output_positive_amount_refunded"

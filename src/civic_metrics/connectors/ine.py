@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from civic_metrics.catalog import DatasetDefinition, IndicatorDefinition
-from civic_metrics.connectors.base import Connector, ConnectorContext
+from civic_metrics.connectors.base import Connector, ConnectorContext, lookback_periods
 from civic_metrics.domain import DatasetPayload, ObservationCandidate
 from civic_metrics.parsers.common import normalise_text, parse_decimal, period_from_ine_date
 
@@ -16,9 +16,23 @@ LOGGER = logging.getLogger(__name__)
 class IneTableConnector(Connector):
     connector_name = "ine_table"
 
+    def collect(self, dataset, context, indicators):
+        tables = dataset.config.get("indicator_tables")
+        if not tables:
+            return super().collect(dataset, context, indicators)
+        documents = []
+        for table_id in dict.fromkeys(tables.values()):
+            selected = [item for item in indicators if tables.get(item.code) == table_id]
+            if not selected:
+                continue
+            table = dataset.model_copy(update={"config": {**dataset.config, "table_id": table_id}})
+            payload = self.fetch(table, context)
+            documents.append((payload, self.extract(table, payload, selected)))
+        return documents
+
     def fetch(self, dataset: DatasetDefinition, context: ConnectorContext) -> DatasetPayload:
         table_id = str(dataset.config["table_id"])
-        periods = int(dataset.config.get("nult", context.settings.max_history_periods))
+        periods = lookback_periods(context, context.frequency or "monthly")
         base_url = dataset.endpoint or "https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA"
         response = context.http.get(f"{base_url.rstrip('/')}/{table_id}", params={"nult": periods})
         return context.http.payload(
@@ -114,6 +128,8 @@ class IneTableConnector(Connector):
 
     @classmethod
     def _matches(cls, series: dict[str, Any], indicator: IndicatorDefinition) -> bool:
+        if indicator.extraction.series_code:
+            return series.get("COD") == indicator.extraction.series_code
         haystack = cls._haystack(series)
         includes = [normalise_text(item) for item in indicator.extraction.include]
         excludes = [normalise_text(item) for item in indicator.extraction.exclude]

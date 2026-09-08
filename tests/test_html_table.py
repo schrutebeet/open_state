@@ -10,8 +10,12 @@ def test_html_table_skips_title_and_header_rows() -> None:
     catalog = load_catalog(Path("config"))
     dataset = catalog.dataset_by_code["ine_epa_summary"]
     indicators = [
-        catalog.indicator_by_code["labour_force"],
-        catalog.indicator_by_code["unemployment_rate"],
+        catalog.indicator_by_code[code].model_copy(update={
+            "extraction": catalog.indicator_by_code[code].extraction.model_copy(update={
+                "kind": "html_table_field", "field": field,
+            }),
+        })
+        for code, field in [("labour_force", "Activos"), ("unemployment_rate", "Tasa de paro")]
     ]
     body = b"""
     <html><body><table>
@@ -35,5 +39,9 @@ def test_html_table_skips_title_and_header_rows() -> None:
     )
     observations = HtmlTableConnector().extract(dataset, payload, indicators)
     assert {item.indicator_code for item in observations} == {"labour_force", "unemployment_rate"}
-    assert {item.period.label for item in observations} == {"2026-Q2"}
-    assert str(next(item.value for item in observations if item.indicator_code == "labour_force")) == "25274300.0"
+    assert {item.period.label for item in observations} == {"2026-Q1", "2026-Q2"}
+    assert str(next(
+        item.value
+        for item in observations
+        if item.indicator_code == "labour_force" and item.period.label == "2026-Q2"
+    )) == "25274300.0"

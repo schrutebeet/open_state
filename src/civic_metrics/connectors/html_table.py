@@ -20,7 +20,12 @@ class HtmlTableConnector(Connector):
         if not dataset.endpoint:
             raise ValueError(f"Dataset {dataset.code} requires an endpoint")
         response = context.http.get(dataset.endpoint)
-        return context.http.payload(dataset.code, dataset.source, response)
+        return context.http.payload(
+            dataset.code,
+            dataset.source,
+            response,
+            {"history_periods": context.settings.lookback_period},
+        )
 
     def extract(
         self,
@@ -61,39 +66,34 @@ class HtmlTableConnector(Connector):
 
         # The INE press table is newest-first, but selecting by parsed period also
         # works if the publisher changes the ordering.
-        row_index, row, period = max(parsed_rows, key=lambda item: item[2].end)
-        headers = self._find_headers(matrix, row_index, indicators, period_column)
-
         results: list[ObservationCandidate] = []
-        for indicator in indicators:
-            field = normalise_text(indicator.extraction.field)
-            matching_indexes = [
-                index for index, header in enumerate(headers) if field and field in normalise_text(header)
-            ]
-            if not matching_indexes:
-                LOGGER.warning(
-                    "HTML header %s not found for %s: %s",
-                    field,
-                    indicator.code,
-                    headers,
+        history_periods = int(payload.metadata.get("history_periods", 12))
+        for row_index, row, period in sorted(parsed_rows, key=lambda item: item[2].end)[-history_periods:]:
+            headers = self._find_headers(matrix, row_index, indicators, period_column)
+            for indicator in indicators:
+                field = normalise_text(indicator.extraction.field)
+                matching_indexes = [
+                    index for index, header in enumerate(headers)
+                    if field and field in normalise_text(header)
+                ]
+                if not matching_indexes:
+                    continue
+                index = matching_indexes[0]
+                if index >= len(row):
+                    continue
+                results.append(
+                    ObservationCandidate(
+                        indicator_code=indicator.code,
+                        source_code=dataset.source,
+                        dataset_code=dataset.code,
+                        period=period,
+                        value=parse_decimal(row[index]) * Decimal(indicator.extraction.multiplier),
+                        unit=indicator.unit,
+                        source_series=headers[index],
+                        source_url=payload.source_url,
+                        metadata={"headers": headers, "raw_period": row[period_column]},
+                    )
                 )
-                continue
-            index = matching_indexes[0]
-            if index >= len(row):
-                continue
-            results.append(
-                ObservationCandidate(
-                    indicator_code=indicator.code,
-                    source_code=dataset.source,
-                    dataset_code=dataset.code,
-                    period=period,
-                    value=parse_decimal(row[index]) * Decimal(indicator.extraction.multiplier),
-                    unit=indicator.unit,
-                    source_series=headers[index],
-                    source_url=payload.source_url,
-                    metadata={"headers": headers, "raw_period": row[period_column]},
-                )
-            )
         return results
 
     @staticmethod

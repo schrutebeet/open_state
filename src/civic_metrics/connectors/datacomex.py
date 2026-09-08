@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
+import hashlib
+import random
+import time
+from datetime import date
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urlencode
 
 from civic_metrics.catalog import DatasetDefinition, IndicatorDefinition
-from civic_metrics.connectors.base import Connector, ConnectorContext
+from civic_metrics.connectors.base import Connector, ConnectorContext, lookback_periods
 from civic_metrics.domain import DatasetPayload, ObservationCandidate
 from civic_metrics.parsers.common import normalise_text, parse_decimal, period_from_label
 from civic_metrics.security import get_datacomex_credentials
@@ -24,6 +28,7 @@ class DataComexConnector(Connector):
 
     LOGIN_URL = "https://comercio.serviciosmin.gob.es/DatacomexAPI/IniciarSesion"
     DATA_URL = "https://comercio.serviciosmin.gob.es/DatacomexAPI/ObtenerDatos"
+    MAX_LATEST_PERIOD_PROBE = 24
 
     def fetch(self, dataset: DatasetDefinition, context: ConnectorContext) -> DatasetPayload:
         credentials = get_datacomex_credentials(
@@ -44,19 +49,103 @@ class DataComexConnector(Connector):
         token = self._extract_token(token_document)
         params = {
             "f": dataset.config.get("flow", "I/E"),
-            "pe": dataset.config.get("period", "LastM"),
             "pa": dataset.config.get("country", "TOTAL"),
             "ta": dataset.config.get("taric", "TOTAL"),
             "pr": dataset.config.get("province", "TOTAL"),
         }
-        data_url = f"{dataset.endpoint or self.DATA_URL}?{urlencode({'access_token': token, **params})}"
-        response = context.http.get(
-            data_url,
-            params=None,
-            json_body=None,
-            headers=None,
+        lookback = lookback_periods(context, context.frequency or "monthly")
+        periods = self._lookback_months(date.today(), lookback)
+        rows: list[Any] = []
+        endpoint = dataset.endpoint or self.DATA_URL
+        last_response = None
+        request_count = 0
+
+        # DataComex usually publishes with a delay. Find the newest month that
+        # actually has data first, then take the requested history from there.
+        latest_period = None
+        latest_rows: list[Any] = []
+        probe_periods = self._lookback_months(
+            date.today(), self.MAX_LATEST_PERIOD_PROBE
         )
-        return context.http.payload(dataset.code, dataset.source, response, {"query": params})
+        for period in reversed(probe_periods):
+            query = {**params, "pe": period}
+            data_url = f"{endpoint}?{urlencode({'access_token': token, **query})}"
+            response = context.http.get(
+                data_url,
+                params=None,
+                json_body=None,
+                headers=None,
+            )
+            request_count += 1
+            last_response = response
+            document = json.loads(response.body.decode("utf-8-sig"))
+            period_rows = document if isinstance(document, list) else document.get(
+                "data", document.get("Resultados", [])
+            )
+            if period_rows and period_rows[0]["euros"] is not None:
+                latest_period = period
+                latest_rows = period_rows
+                break
+            time.sleep(random.uniform(1, 3))  # Avoid rate limiting on DataComex API
+
+        if latest_period is not None:
+            latest_year = int(latest_period[:4])
+            latest_month = int(latest_period[4:])
+            periods = self._lookback_months(
+                date(latest_year, latest_month, 1), lookback
+            )
+            rows.extend(latest_rows)
+
+            # The newest period has already been fetched during the probe.
+            for period in periods:
+                if period == latest_period:
+                    continue
+                query = {**params, "pe": period}
+                data_url = f"{endpoint}?{urlencode({'access_token': token, **query})}"
+                response = context.http.get(
+                    data_url,
+                    params=None,
+                    json_body=None,
+                    headers=None,
+                )
+                request_count += 1
+                last_response = response
+                document = json.loads(response.body.decode("utf-8-sig"))
+                period_rows = document if isinstance(document, list) else document.get(
+                    "data", document.get("Resultados", [])
+                )
+                rows.extend(period_rows)
+                time.sleep(random.uniform(1, 3))  # Avoid rate limiting on DataComex API
+        body = json.dumps(rows, ensure_ascii=False).encode("utf-8")
+        if last_response is None:
+            raise ValueError("DataComex lookback produced no requests")
+        return DatasetPayload(
+            dataset_code=dataset.code,
+            source_code=dataset.source,
+            fetched_at=context.http.payload(dataset.code, dataset.source, last_response).fetched_at,
+            source_url=last_response.source_url,
+            content_type=last_response.content_type,
+            body=body,
+            sha256=hashlib.sha256(body).hexdigest(),
+            metadata={
+                "query": params,
+                "periods_requested": periods,
+                "request_count": request_count,
+                "latest_available_period": latest_period,
+            },
+        )
+
+    @staticmethod
+    def _lookback_months(as_of: date, count: int) -> list[str]:
+        values: list[str] = []
+        year, month = as_of.year, as_of.month
+        for _ in range(count):
+            values.append(f"{year}{month:02d}")
+            month -= 1
+            if month == 0:
+                year -= 1
+                month = 12
+        return list(reversed(values))
 
     def extract(
         self,
