@@ -116,8 +116,13 @@ jobs:
           python - <<'PY'
           import os
           import sqlite3
+          from pathlib import Path
 
-          with sqlite3.connect(os.environ["SNAPSHOT_DB_PATH"]) as connection:
+          database = Path(os.environ["SNAPSHOT_DB_PATH"])
+          if not database.is_file() or database.stat().st_size == 0:
+            raise SystemExit(f"Snapshot database was not created: {database}")
+
+          with sqlite3.connect(database) as connection:
             maximum = connection.execute(
               """
               SELECT MAX(period_count) FROM (
@@ -135,51 +140,49 @@ jobs:
           print(f"Snapshot respects LOOKBACK_PERIOD={os.environ['LOOKBACK_PERIOD']}")
           PY
 
-      - name: Verify and checkpoint SQLite database
+      - name: Verify and checkpoint private SQLite databases
         run: |
           python - <<'PY'
           import os
           import sqlite3
           from pathlib import Path
 
-          database = Path(os.environ["HISTORY_DB_PATH"])
-          if not database.is_file() or database.stat().st_size == 0:
-              raise SystemExit(f"Database was not created: {database}")
+          databases = {
+              "history": Path(os.environ["HISTORY_DB_PATH"]),
+              "snapshot": Path(os.environ["SNAPSHOT_DB_PATH"]),
+          }
+          for name, database in databases.items():
+              if not database.is_file() or database.stat().st_size == 0:
+                  raise SystemExit(f"{name.title()} database was not created: {database}")
 
-          with sqlite3.connect(database) as connection:
-              connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-              result = connection.execute("PRAGMA quick_check").fetchone()
-              observations = connection.execute(
-                "SELECT COUNT(*) FROM observations"
-              ).fetchone()[0]
+              with sqlite3.connect(database) as connection:
+                  connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                  result = connection.execute("PRAGMA quick_check").fetchone()
+                  observations = connection.execute(
+                    "SELECT COUNT(*) FROM observations"
+                  ).fetchone()[0]
 
-          if not result or result[0] != "ok":
-              raise SystemExit(f"SQLite integrity check failed: {result}")
-          if observations < int(os.environ["RESTORED_OBSERVATIONS"]):
-              raise SystemExit(
-                  "SQLite observation count decreased after ingestion: "
-                  f"{observations} < {os.environ['RESTORED_OBSERVATIONS']}"
+              if not result or result[0] != "ok":
+                  raise SystemExit(
+                      f"SQLite integrity check failed for {name}: {result}"
+                  )
+              if name == "history" and observations < int(
+                  os.environ["RESTORED_OBSERVATIONS"]
+              ):
+                  raise SystemExit(
+                      "SQLite observation count decreased after ingestion: "
+                      f"{observations} < {os.environ['RESTORED_OBSERVATIONS']}"
+                  )
+
+              print(
+                  f"{name.title()} SQLite integrity check passed "
+                  f"({database.stat().st_size} bytes, {observations} observations)."
               )
-
-          print(
-              f"SQLite integrity check passed ({database.stat().st_size} bytes, "
-              f"{observations} observations)."
-          )
           PY
 
-      - name: Export frontend-safe JSON snapshot
-        run: python scripts/export_dashboard.py --database "$SNAPSHOT_DB_PATH" --output public/dashboard.json
-
-      - name: Publish dashboard JSON to public R2 bucket
-        run: |
-          aws s3 cp \
-            public/dashboard.json \
-            "s3://${R2_PUBLIC_BUCKET}/v1/dashboard.json" \
-            --endpoint-url "$R2_ENDPOINT_URL" \
-            --content-type "application/json; charset=utf-8" \
-            --cache-control "public, max-age=300, stale-while-revalidate=86400"
-
-      - name: Upload dated database backup to R2
+      # Persist both databases before publishing anything derived from them.
+      # The public JSON is deliberately the final publication step.
+      - name: Upload dated database backups to private R2
         run: |
           BACKUP_DATE="$(date +%Y-%m-%dT%H-%M-%S%z)"
           aws s3 cp \
@@ -191,7 +194,7 @@ jobs:
             "s3://${R2_PRIVATE_BUCKET}/backups/${BACKUP_DATE}/snapshot.db" \
             --endpoint-url "$R2_ENDPOINT_URL"
 
-      - name: Publish current database to R2
+      - name: Publish current databases to private R2
         run: |
           aws s3 cp \
             "$HISTORY_DB_PATH" \
@@ -201,6 +204,35 @@ jobs:
             "$SNAPSHOT_DB_PATH" \
             "s3://${R2_PRIVATE_BUCKET}/current/civic_metrics_snapshot.db" \
             --endpoint-url "$R2_ENDPOINT_URL"
+
+      - name: Export frontend-safe JSON from the current snapshot
+        run: |
+          rm -f public/dashboard.json
+          python scripts/export_dashboard.py \
+            --database "$SNAPSHOT_DB_PATH" \
+            --output public/dashboard.json
+          test -s public/dashboard.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          dashboard = json.loads(Path("public/dashboard.json").read_text(encoding="utf-8"))
+          if not dashboard.get("indicators"):
+              raise SystemExit("Generated dashboard JSON contains no indicators")
+          print(
+              "Generated dashboard JSON from the current snapshot: "
+              f"{len(dashboard['indicators'])} indicators"
+          )
+          PY
+
+      - name: Publish dashboard JSON to public R2 bucket
+        run: |
+          aws s3 cp \
+            public/dashboard.json \
+            "s3://${R2_PUBLIC_BUCKET}/v1/dashboard.json" \
+            --endpoint-url "$R2_ENDPOINT_URL" \
+            --content-type "application/json; charset=utf-8" \
+            --cache-control "public, max-age=300, stale-while-revalidate=86400"
 
       # This copy is useful for debugging and can be downloaded from the
       # individual workflow run. It is not the persistent production copy.
