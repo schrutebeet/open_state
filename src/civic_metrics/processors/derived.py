@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import ast
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, DivisionByZero
-from typing import Callable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -56,7 +56,18 @@ class DerivedIndicatorEngine:
         target_ends = self._target_period_ends(definition.dependencies, limit)
         observations: list[Observation] = []
         for target_end in target_ends:
-            result = self.evaluate(definition, target_end=target_end)
+            try:
+                result = self.evaluate(definition, target_end=target_end)
+            except FormulaError as exc:
+                # A dependency may not yet have enough history for an early
+                # target period.  That must not prevent newer valid periods
+                # from being materialised.
+                message = str(exc)
+                if "needs " in message and " observations" in message:
+                    continue
+                if message.startswith("No observation for "):
+                    continue
+                raise
             if result is None:
                 continue
             observation = self._save_result(definition, result)
@@ -64,7 +75,9 @@ class DerivedIndicatorEngine:
         self.session.flush()
         return observations
 
-    def _save_result(self, definition: IndicatorDefinition, result: EvaluationResult) -> Observation:
+    def _save_result(
+        self, definition: IndicatorDefinition, result: EvaluationResult
+    ) -> Observation:
         if not definition.formula:
             raise FormulaError(f"Indicator {definition.code} has no formula")
         dependency_signature = hashlib.sha256(
@@ -116,7 +129,11 @@ class DerivedIndicatorEngine:
             )
         value, dependencies = self._evaluate_node(tree.body, target_period)
         unique = {item.id: item for item in dependencies}
-        return EvaluationResult(value=value, dependencies=tuple(unique.values()), period=target_period)
+        return EvaluationResult(
+            value=value,
+            dependencies=tuple(unique.values()),
+            period=target_period,
+        )
 
     def _target_observation(
         self, dependency_codes: list[str], target_end: date | None = None
@@ -215,7 +232,10 @@ class DerivedIndicatorEngine:
                     raise FormulaError(
                         f"rolling_sum({indicator_code}, {periods}) needs {periods} observations"
                     )
-                return sum((decimal_value(item) for item in observations), Decimal("0")), observations
+                return (
+                    sum((decimal_value(item) for item in observations), Decimal("0")),
+                    observations,
+                )
             if node.func.id == "pct_change":
                 observations = self._history(indicator_code, target_period.end, periods + 1)
                 if len(observations) < periods + 1:
