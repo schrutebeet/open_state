@@ -10,6 +10,7 @@ import openpyxl
 
 from civic_metrics.catalog import DatasetDefinition, IndicatorDefinition
 from civic_metrics.connectors.html_excel import HtmlExcelConnector
+from civic_metrics.connectors.social_security_pensions import SocialSecurityPensionsConnector
 from civic_metrics.domain import DatasetPayload, ObservationCandidate, Period
 from civic_metrics.parsers.common import normalise_text, parse_decimal
 
@@ -18,6 +19,11 @@ class SocialSecurityMinimumSupplementsConnector(HtmlExcelConnector):
     """Extract the national total number of pensions with a minimum supplement."""
 
     connector_name = "social_security_minimum_supplements"
+
+    def collect(self, dataset, context, indicators):
+        return SocialSecurityPensionsConnector._collect_static_and_latest(
+            self, dataset, context, indicators
+        )
 
     def extract(
         self,
@@ -30,7 +36,10 @@ class SocialSecurityMinimumSupplementsConnector(HtmlExcelConnector):
         if sheet_name not in workbook.sheetnames:
             raise LookupError(f"Workbook does not contain expected sheet {sheet_name!r}")
         value, row_number = self._national_total(workbook[sheet_name])
-        period = self._period_from_payload(payload)
+        period = (
+            SocialSecurityPensionsConnector._period_from_workbook(workbook)
+            or self._period_from_payload(payload)
+        )
         return [
             ObservationCandidate(
                 indicator_code=indicator.code,

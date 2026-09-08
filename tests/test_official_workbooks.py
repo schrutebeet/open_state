@@ -38,6 +38,16 @@ def test_social_security_series_workbook() -> None:
         dataset, payload(dataset.code, dataset.source, "S202607.xlsx"), indicators
     )
     values = {item.indicator_code: item.value for item in results}
+    assert {item.period.label for item in results} == {
+        "2026-01",
+        "2026-02",
+        "2026-03",
+        "2026-04",
+        "2026-05",
+        "2026-06",
+        "2026-07",
+        "2026-08",
+    }
     assert values["pension_count"] == 10517634
     assert values["average_pension"].quantize(__import__('decimal').Decimal('0.01')) == __import__('decimal').Decimal('1372.16')
     assert values["average_retirement_pension"].quantize(__import__('decimal').Decimal('0.01')) == __import__('decimal').Decimal('1573.65')
@@ -68,6 +78,7 @@ def test_sepe_legacy_workbook() -> None:
         **{**source_payload.__dict__, "content_type": "application/vnd.ms-excel"}
     )
     results = SepeRegisteredUnemploymentConnector().extract(dataset, source_payload, indicators)
-    assert len(results) == 1
-    assert results[0].value == 2311499
-    assert results[0].period.label == "2026-07"
+    assert len(results) == 12
+    latest = max(results, key=lambda item: item.period.end)
+    assert latest.value == 2311499
+    assert latest.period.label == "2026-07"
