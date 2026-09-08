@@ -25,12 +25,13 @@ class Settings(BaseSettings):
     )
 
     project_root: Path = Field(default_factory=lambda: Path.cwd())
-    database_url: str = "sqlite+pysqlite:///./data/civic_metrics.db"
+    database_url: str = "sqlite+pysqlite:///./data/history.db"
+    snapshot_db_path: Path = Path("data/snapshot.db")
     config_dir: Path = Path("config")
     artifacts_dir: Path = Path("artifacts")
     log_level: str = "INFO"
     http_timeout_seconds: float = 45.0
-    max_history_periods: int = 12
+    lookback_period: int = Field(default=12, ge=1)
     fail_fast: bool = False
     genai_validation_enabled: bool = False
     genai_validation_dataset_ids: Annotated[tuple[int, ...] | None, NoDecode] = None
@@ -77,6 +78,9 @@ class Settings(BaseSettings):
 
     def resolved_artifacts_dir(self) -> Path:
         return self._resolve(self.artifacts_dir)
+
+    def resolved_snapshot_db_path(self) -> Path:
+        return self._resolve(self.snapshot_db_path).resolve()
 
     def resolved_database_url(self) -> str:
         if self.database_url.endswith(":memory:") or not self.database_url.startswith("sqlite"):

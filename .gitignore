@@ -227,4 +227,7 @@ __marimo__/
 
 # Internal project stuff
 artifacts/
-data/
+data/*
+
+# Manual upload of Social Security pensions dataset
+!data/social_security_data.csv

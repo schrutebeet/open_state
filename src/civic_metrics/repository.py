@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import and_, or_, select
@@ -15,6 +15,16 @@ def save_observation(
     candidate: ObservationCandidate,
     artifact: RawArtifact | None,
 ) -> Observation:
+    observation, _ = save_observation_with_status(session, candidate, artifact)
+    return observation
+
+
+def save_observation_with_status(
+    session: Session,
+    candidate: ObservationCandidate,
+    artifact: RawArtifact | None,
+) -> tuple[Observation, bool]:
+    """Save an observation and report whether its persisted data changed."""
     indicator = session.scalar(select(Indicator).where(Indicator.code == candidate.indicator_code))
     if indicator is None:
         raise KeyError(f"Unknown indicator {candidate.indicator_code}")
@@ -40,6 +50,24 @@ def save_observation(
         ).order_by(Observation.retrieved_at.desc(), Observation.id.desc())
     )
     if existing is not None:
+        metadata = {
+            **candidate.metadata,
+            "source_code": candidate.source_code,
+            "dataset_code": candidate.dataset_code,
+        }
+        changed = any(
+            (
+                existing.value != candidate.value,
+                existing.unit != candidate.unit,
+                existing.status != candidate.status,
+                existing.is_provisional != candidate.is_provisional,
+                existing.source_url != candidate.source_url,
+                existing.published_at != candidate.published_at,
+                existing.metadata_json != metadata,
+            )
+        )
+        if not changed:
+            return existing, False
         existing.raw_artifact_id = artifact.id if artifact else existing.raw_artifact_id
         existing.period_label = candidate.period.label
         existing.frequency = candidate.period.frequency
@@ -49,13 +77,9 @@ def save_observation(
         existing.is_provisional = candidate.is_provisional
         existing.source_url = candidate.source_url
         existing.published_at = candidate.published_at
-        existing.retrieved_at = datetime.now(timezone.utc)
-        existing.metadata_json = {
-            **candidate.metadata,
-            "source_code": candidate.source_code,
-            "dataset_code": candidate.dataset_code,
-        }
-        return existing
+        existing.retrieved_at = datetime.now(UTC)
+        existing.metadata_json = metadata
+        return existing, True
 
     observation = Observation(
         indicator_id=indicator.id,
@@ -74,7 +98,7 @@ def save_observation(
         source_series=candidate.source_series,
         source_url=candidate.source_url,
         published_at=candidate.published_at,
-        retrieved_at=datetime.now(timezone.utc),
+        retrieved_at=datetime.now(UTC),
         metadata_json={
             **candidate.metadata,
             "source_code": candidate.source_code,
@@ -83,7 +107,7 @@ def save_observation(
     )
     session.add(observation)
     session.flush()
-    return observation
+    return observation, True
 
 
 def latest_observation(session: Session, indicator_code: str) -> Observation | None:

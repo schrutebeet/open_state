@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--database",
-        default=os.environ.get("DB_PATH", "data/civic_metrics.db"),
+        default=os.environ.get("SNAPSHOT_DB_PATH", "data/snapshot.db"),
         help="Path to the SQLite database.",
     )
     parser.add_argument(
@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--history-limit",
         type=int,
-        default=24,
+        default=int(os.environ.get("LOOKBACK_PERIOD", "12")),
         help="Maximum observations exported per indicator.",
     )
     return parser.parse_args()

@@ -113,6 +113,28 @@ class GenAIDataValidator:
             )
 
 
+def data_source_type(definition: DatasetDefinition, payload: DatasetPayload) -> str:
+    """Classify a source for the validation policy."""
+    content_type = payload.content_type.lower()
+    source_url = payload.source_url.lower()
+    if definition.connector in {"bde", "datacomex", "ine"} or "json" in content_type:
+        return "API"
+    if (
+        "spreadsheet" in content_type
+        or "excel" in content_type
+        or source_url.endswith((".xls", ".xlsx"))
+    ):
+        return "Excel"
+    return "document"
+
+
+def skipped_validation(source_type: str) -> GenAIValidationResult:
+    return GenAIValidationResult(
+        status="skipped",
+        description=f"Skipped as the data source is a deterministic {source_type}",
+    )
+
+
 _OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "json_schema",
     "name": "dataset_validation",

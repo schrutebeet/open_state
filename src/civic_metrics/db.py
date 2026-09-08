@@ -40,6 +40,10 @@ def make_session_factory(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 
+# Backwards-compatible alias for callers that used the original misspelling.
+ahamake_session_factory = make_session_factory
+
+
 def session_scope(factory: sessionmaker[Session]) -> Generator[Session, None, None]:
     session = factory()
     try:

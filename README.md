@@ -15,6 +15,19 @@ The project intentionally contains **no FastAPI application yet**. Its job is to
 
 ## Current scope
 
+Running `python main.py` updates the historical SQLite database configured by
+`DATABASE_URL` (default: `data/history.db`) and then automatically rebuilds
+`data/snapshot.db`. Set `SNAPSHOT_DB_PATH` to change the snapshot location.
+`LOOKBACK_PERIOD` (default: 12) limits the snapshot to the latest distinct
+published periods per indicator; it never deletes observations from history.
+Both settings can be supplied through `.env` or environment variables.
+
+The snapshot is generated before `--strict` returns an ingestion failure, so
+partial runs contain the available historical data, potentially including data
+from earlier runs. An interrupted run does not publish a new snapshot.
+To rebuild only the snapshot, run `python scripts/create_snapshot_db.py`.
+Dashboard JSON export remains a separate step using `scripts/export_dashboard.py`.
+
 - 4 categories
 - 14 subcategories
 - 55 indicators

@@ -27,8 +27,10 @@ jobs:
     env:
       PYTHONUNBUFFERED: "1"
       TZ: Europe/Madrid
-      DB_PATH: data/civic_metrics.db
-      DATABASE_URL: sqlite+pysqlite:///${{ github.workspace }}/data/civic_metrics.db
+      LOOKBACK_PERIOD: ${{ vars.LOOKBACK_PERIOD || 12 }}
+      HISTORY_DB_PATH: data/history.db
+      SNAPSHOT_DB_PATH: data/snapshot.db
+      DATABASE_URL: sqlite+pysqlite:///${{ github.workspace }}/data/history.db
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: auto
@@ -71,11 +73,15 @@ jobs:
 
       - name: Restore latest database from R2
         run: |
-          aws s3 cp \
-            "s3://${R2_PRIVATE_BUCKET}/current/civic_metrics.db" \
-            "$DB_PATH" \
-            --endpoint-url "$R2_ENDPOINT_URL"
-          echo "Restored the current database from R2."
+          if aws s3 cp \
+            "s3://${R2_PRIVATE_BUCKET}/current/history.db" \
+            "$HISTORY_DB_PATH" \
+            --endpoint-url "$R2_ENDPOINT_URL"; then
+            echo "Restored the complete historical database from R2."
+          else
+            echo "No historical database exists in R2; starting a new history database."
+            rm -f "$HISTORY_DB_PATH"
+          fi
 
       - name: Verify restored database history
         run: |
@@ -83,18 +89,20 @@ jobs:
           import os
           import sqlite3
 
-          database = os.environ["DB_PATH"]
-          with sqlite3.connect(database) as connection:
+          database = os.environ["HISTORY_DB_PATH"]
+          if not os.path.isfile(database):
+            observations = 0
+            indicators = 0
+          else:
+            with sqlite3.connect(database) as connection:
               observations = connection.execute(
-                  "SELECT COUNT(*) FROM observations"
+                "SELECT COUNT(*) FROM observations"
               ).fetchone()[0]
               indicators = connection.execute(
-                  "SELECT COUNT(*) FROM indicators"
+                "SELECT COUNT(*) FROM indicators"
               ).fetchone()[0]
 
-          print(f"Restored database: {observations} observations, {indicators} indicators")
-          if observations < 1:
-              raise SystemExit("Refusing to continue: restored database is empty")
+          print(f"Restored history: {observations} observations, {indicators} indicators")
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
               handle.write(f"RESTORED_OBSERVATIONS={observations}\n")
 
@@ -103,6 +111,30 @@ jobs:
         # fails, is incomplete or is skipped, preventing publication to R2.
         run: python main.py --strict
 
+      - name: Verify execution snapshot
+        run: |
+          python - <<'PY'
+          import os
+          import sqlite3
+
+          with sqlite3.connect(os.environ["SNAPSHOT_DB_PATH"]) as connection:
+            maximum = connection.execute(
+              """
+              SELECT MAX(period_count) FROM (
+                SELECT indicator_id, COUNT(DISTINCT period_start || ':' || period_end) AS period_count
+                FROM observations
+                WHERE status = 'published'
+                GROUP BY indicator_id
+              )
+              """
+            ).fetchone()[0] or 0
+          if maximum > int(os.environ["LOOKBACK_PERIOD"]):
+            raise SystemExit(
+              f"Snapshot exceeds LOOKBACK_PERIOD: {maximum} > {os.environ['LOOKBACK_PERIOD']}"
+            )
+          print(f"Snapshot respects LOOKBACK_PERIOD={os.environ['LOOKBACK_PERIOD']}")
+          PY
+
       - name: Verify and checkpoint SQLite database
         run: |
           python - <<'PY'
@@ -110,7 +142,7 @@ jobs:
           import sqlite3
           from pathlib import Path
 
-          database = Path(os.environ["DB_PATH"])
+          database = Path(os.environ["HISTORY_DB_PATH"])
           if not database.is_file() or database.stat().st_size == 0:
               raise SystemExit(f"Database was not created: {database}")
 
@@ -136,7 +168,7 @@ jobs:
           PY
 
       - name: Export frontend-safe JSON snapshot
-        run: python scripts/export_dashboard.py --database "$DB_PATH" --output public/dashboard.json
+        run: python scripts/export_dashboard.py --database "$SNAPSHOT_DB_PATH" --output public/dashboard.json
 
       - name: Publish dashboard JSON to public R2 bucket
         run: |
@@ -151,15 +183,23 @@ jobs:
         run: |
           BACKUP_DATE="$(date +%Y-%m-%dT%H-%M-%S%z)"
           aws s3 cp \
-            "$DB_PATH" \
-            "s3://${R2_PRIVATE_BUCKET}/backups/${BACKUP_DATE}/civic_metrics.db" \
+            "$HISTORY_DB_PATH" \
+            "s3://${R2_PRIVATE_BUCKET}/backups/${BACKUP_DATE}/history.db" \
+            --endpoint-url "$R2_ENDPOINT_URL"
+          aws s3 cp \
+            "$SNAPSHOT_DB_PATH" \
+            "s3://${R2_PRIVATE_BUCKET}/backups/${BACKUP_DATE}/snapshot.db" \
             --endpoint-url "$R2_ENDPOINT_URL"
 
       - name: Publish current database to R2
         run: |
           aws s3 cp \
-            "$DB_PATH" \
-            "s3://${R2_PRIVATE_BUCKET}/current/civic_metrics.db" \
+            "$HISTORY_DB_PATH" \
+            "s3://${R2_PRIVATE_BUCKET}/current/history.db" \
+            --endpoint-url "$R2_ENDPOINT_URL"
+          aws s3 cp \
+            "$SNAPSHOT_DB_PATH" \
+            "s3://${R2_PRIVATE_BUCKET}/current/civic_metrics_snapshot.db" \
             --endpoint-url "$R2_ENDPOINT_URL"
 
       # This copy is useful for debugging and can be downloaded from the
@@ -170,8 +210,9 @@ jobs:
         with:
           name: civic-metrics-${{ github.run_id }}
           path: |
-            data/civic_metrics.db
-            data/civic_metrics.db-wal
-            data/civic_metrics.db-shm
+            data/history.db
+            data/history.db-wal
+            data/history.db-shm
+            data/snapshot.db
           if-no-files-found: warn
           retention-days: 30

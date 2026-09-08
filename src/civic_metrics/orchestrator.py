@@ -14,11 +14,11 @@ from civic_metrics.catalog import Catalog, DatasetDefinition, IndicatorDefinitio
 from civic_metrics.connectors import CONNECTORS
 from civic_metrics.connectors.base import ConnectorContext
 from civic_metrics.connectors.datacomex import MissingCredentialsError
-from civic_metrics.genai_validation import GenAIDataValidator
+from civic_metrics.genai_validation import GenAIDataValidator, data_source_type, skipped_validation
 from civic_metrics.http import HttpClient
 from civic_metrics.models import GenAIValidationLog, IngestionRun, Observation, SourceDataset
 from civic_metrics.processors import DerivedIndicatorEngine, FormulaError
-from civic_metrics.repository import save_observation
+from civic_metrics.repository import save_observation_with_status
 from civic_metrics.settings import Settings
 from civic_metrics.validation import validate_candidate
 
@@ -32,12 +32,15 @@ class DatasetResult:
     required: bool = True
     fetched_observations: int = 0
     inserted_observations: int = 0
+    extracted_by_indicator: dict[str, int] = field(default_factory=dict)
+    history_by_indicator: dict[str, int] = field(default_factory=dict)
+    snapshot_by_indicator: dict[str, int] = field(default_factory=dict)
     expected_indicators: int = 0
     extracted_indicators: int = 0
     missing_indicators: list[str] = field(default_factory=list)
     artifact_path: str | None = None
     error: str | None = None
-    genai_validation: dict[str, object] | None = None
+    genai_validation: dict[str, object] | list[dict[str, object]] | None = None
 
 
 @dataclass
@@ -49,6 +52,7 @@ class PipelineResult:
     datasets: list[DatasetResult] = field(default_factory=list)
     derived_inserted: int = 0
     derived_skipped: int = 0
+    derived_skipped_details: list[str] = field(default_factory=list)
     derived_errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
@@ -60,6 +64,7 @@ class PipelineResult:
             "datasets": [asdict(item) for item in self.datasets],
             "derived_inserted": self.derived_inserted,
             "derived_skipped": self.derived_skipped,
+            "derived_skipped_details": self.derived_skipped_details,
             "derived_errors": self.derived_errors,
         }
 
@@ -110,7 +115,12 @@ class PipelineOrchestrator:
                 if result.status == "failed" and self.settings.fail_fast:
                     break
 
-            derived_inserted, derived_skipped, derived_errors = self._run_derived()
+            (
+                derived_inserted,
+                derived_skipped,
+                derived_skipped_details,
+                derived_errors,
+            ) = self._run_derived()
         finally:
             http.close()
 
@@ -134,6 +144,7 @@ class PipelineOrchestrator:
             datasets=results,
             derived_inserted=derived_inserted,
             derived_skipped=derived_skipped,
+            derived_skipped_details=derived_skipped_details,
             derived_errors=derived_errors,
         )
         with self.session_factory() as session:
@@ -163,12 +174,22 @@ class PipelineOrchestrator:
             )
         connector = connector_type()
         try:
-            payload = connector.fetch(
+            frequencies = {item.frequency for item in indicators}
+            if len(frequencies) != 1:
+                raise ValueError(
+                    f"Dataset {definition.code} mixes indicator frequencies: {sorted(frequencies)}"
+                )
+            documents = connector.collect(
                 definition,
-                ConnectorContext(settings=self.settings, http=http),
+                ConnectorContext(
+                    settings=self.settings,
+                    http=http,
+                    frequency=next(iter(frequencies)),
+                ),
+                indicators,
             )
-            candidates = connector.extract(definition, payload, indicators)
-            validation = None
+            candidates = [candidate for _, rows in documents for candidate in rows]
+            validations = []
             with self.session_factory() as session:
                 dataset_row = session.scalar(
                     select(SourceDataset)
@@ -178,26 +199,30 @@ class PipelineOrchestrator:
                 run = session.get(IngestionRun, run_id)
                 if dataset_row is None or run is None:
                     raise RuntimeError(f"Database catalog row missing for {definition.code}")
-                artifact = store_artifact(
-                    session,
-                    self.settings.resolved_artifacts_dir(),
-                    run,
-                    dataset_row,
-                    payload,
-                )
                 inserted = 0
+                extracted_by_indicator = {item.code: 0 for item in indicators}
+                history_by_indicator = {item.code: 0 for item in indicators}
                 definitions = {item.code: item for item in indicators}
-                for candidate in candidates:
-                    validate_candidate(candidate, definitions[candidate.indicator_code])
-                    observation = save_observation(session, candidate, artifact)
-                    # A new row belongs to this run's artifact. Existing observations retain
-                    # the artifact from the run in which they were first inserted.
-                    if observation.raw_artifact_id == artifact.id:
-                        inserted += 1
+                artifacts = []
+                for document, rows in documents:
+                    document_artifact = store_artifact(
+                        session, self.settings.resolved_artifacts_dir(), run, dataset_row, document,
+                    )
+                    artifacts.append(document_artifact)
+                    for candidate in rows:
+                        extracted_by_indicator[candidate.indicator_code] += 1
+                        validate_candidate(candidate, definitions[candidate.indicator_code])
+                        _, written = save_observation_with_status(
+                            session, candidate, document_artifact
+                        )
+                        if written:
+                            inserted += 1
+                            history_by_indicator[candidate.indicator_code] += 1
+                artifact = artifacts[0]
                 if self.settings.genai_validation_enabled and self.settings.should_validate_dataset(
                     dataset_row.id
                 ):
-                    validation = GenAIDataValidator(
+                    validator = GenAIDataValidator(
                         model=self.settings.genai_validation_model,
                         max_payload_chars=self.settings.genai_validation_max_payload_chars,
                         api_key=(
@@ -205,44 +230,63 @@ class PipelineOrchestrator:
                             if self.settings.openai_api_key is not None
                             else None
                         ),
-                    ).validate(
-                        definition,
-                        indicators,
-                        payload,
-                        candidates,
-                        dataset_id=dataset_row.id,
                     )
-                    session.add(
-                        GenAIValidationLog(
-                            run_id=run.id,
-                            dataset_id=dataset_row.id,
-                            raw_artifact_id=artifact.id,
-                            validated_at=datetime.now(UTC),
-                            model=validation.model,
-                            status=validation.status,
-                            decision=validation.decision,
-                            confidence=(
-                                Decimal(str(validation.confidence))
-                                if validation.confidence is not None
-                                else None
-                            ),
-                            description=validation.description,
-                            error=validation.error,
-                            payload_truncated=validation.payload_truncated,
-                            request_summary_json={
-                                "source_url": payload.source_url,
-                                "content_type": payload.content_type,
-                                "payload_sha256": payload.sha256,
-                                "payload_bytes": len(payload.body),
-                                "candidate_count": len(candidates),
-                                "indicator_codes": [item.code for item in indicators],
-                                "max_payload_chars": (
-                                    self.settings.genai_validation_max_payload_chars
-                                ),
-                            },
-                            response_json=validation.to_dict(),
+                    for (payload, validation_candidates), document_artifact in zip(
+                        documents, artifacts, strict=True
+                    ):
+                        source_type = data_source_type(definition, payload)
+                        validation = (
+                            skipped_validation(source_type)
+                            if source_type == "API"
+                            else validator.validate(
+                                definition,
+                                indicators,
+                                payload,
+                                validation_candidates,
+                                dataset_id=dataset_row.id,
+                            )
                         )
-                    )
+                        validations.append(validation)
+                        reason = validation.description if validation.status == "skipped" else None
+                        session.add(
+                            GenAIValidationLog(
+                                run_id=run.id,
+                                dataset_id=dataset_row.id,
+                                raw_artifact_id=document_artifact.id,
+                                validated_at=datetime.now(UTC),
+                                model=validation.model,
+                                status=validation.status,
+                                decision=validation.decision,
+                                confidence=(
+                                    Decimal(str(validation.confidence))
+                                    if validation.confidence is not None
+                                    else None
+                                ),
+                                description=validation.description,
+                                error=validation.error,
+                                payload_truncated=validation.payload_truncated,
+                                request_summary_json={
+                                    "source_url": payload.source_url,
+                                    "content_type": payload.content_type,
+                                    "payload_sha256": payload.sha256,
+                                    "payload_bytes": len(payload.body),
+                                    "candidate_count": len(validation_candidates),
+                                    "indicator_codes": [item.code for item in indicators],
+                                    "max_payload_chars": (
+                                        self.settings.genai_validation_max_payload_chars
+                                    ),
+                                    "value": "NA" if validation.status == "skipped" else None,
+                                    "reason": reason,
+                                    "data_source_type": source_type,
+                                },
+                                response_json={
+                                    **validation.to_dict(),
+                                    "value": "NA" if validation.status == "skipped" else None,
+                                    "reason": reason,
+                                    "data_source_type": source_type,
+                                },
+                            )
+                        )
                 session.commit()
                 path = artifact.local_path
             expected_codes = {item.code for item in indicators}
@@ -258,17 +302,28 @@ class PipelineOrchestrator:
                 status = "success"
                 error = None
             genai_validation = None
-            if validation is not None:
-                genai_validation = validation.to_dict()
-                if validation.status == "failed" and self.settings.genai_validation_strict:
+            if validations:
+                genai_validation = [item.to_dict() for item in validations]
+                failed_validation = next(
+                    (item for item in validations if item.status == "failed"), None
+                )
+                error_validation = next(
+                    (item for item in validations if item.status == "error"), None
+                )
+                if failed_validation is not None and self.settings.genai_validation_strict:
                     status = "partial"
-                    error = validation.description or "GenAI validation found a mismatch"
-                if validation.status == "error":
+                    error = failed_validation.description or "GenAI validation found a mismatch"
+                if error_validation is not None:
                     LOGGER.warning(
                         "GenAI validation failed for dataset %s: %s",
                         definition.code,
-                        validation.error,
+                        error_validation.error,
                     )
+            validation_output = (
+                genai_validation[0]
+                if genai_validation is not None and len(genai_validation) == 1
+                else genai_validation
+            )
             LOGGER.info(
                 "dataset=%s status=%s candidates=%s inserted=%s indicators=%s/%s",
                 definition.code,
@@ -284,12 +339,14 @@ class PipelineOrchestrator:
                 required=definition.required,
                 fetched_observations=len(candidates),
                 inserted_observations=inserted,
+                extracted_by_indicator=extracted_by_indicator,
+                history_by_indicator=history_by_indicator,
                 expected_indicators=len(expected_codes),
                 extracted_indicators=len(extracted_codes),
                 missing_indicators=missing_codes,
                 artifact_path=path,
                 error=error,
-                genai_validation=genai_validation,
+                genai_validation=validation_output,
             )
         except MissingCredentialsError as exc:
             LOGGER.warning("Dataset %s skipped: %s", definition.code, exc)
@@ -310,9 +367,10 @@ class PipelineOrchestrator:
                 error=f"{type(exc).__name__}: {exc}",
             )
 
-    def _run_derived(self) -> tuple[int, int, list[str]]:
+    def _run_derived(self) -> tuple[int, int, list[str], list[str]]:
         inserted = 0
         skipped = 0
+        skipped_details: list[str] = []
         errors: list[str] = []
         with self.session_factory() as session:
             before_count = session.scalar(select(func.count()).select_from(Observation)) or 0
@@ -321,18 +379,26 @@ class PipelineOrchestrator:
                 if not definition.enabled or definition.extraction.kind != "derived":
                     continue
                 try:
-                    observation = engine.materialise(definition)
-                    if observation is None:
+                    materialised = engine.materialise_history(
+                        definition,
+                        self.settings.lookback_period,
+                    )
+                    if not materialised:
                         skipped += 1
+                        skipped_details.append(
+                            f"{definition.code}: no values materialised; "
+                            "dependencies may be missing"
+                        )
                     else:
-                        inserted += 1
+                        inserted += len(materialised)
                 except FormulaError as exc:
                     skipped += 1
                     message = f"{definition.code}: {exc}"
+                    skipped_details.append(message)
                     errors.append(message)
                     LOGGER.warning("Could not derive %s", message)
             session.flush()
             after_count = session.scalar(select(func.count()).select_from(Observation)) or 0
             inserted = max(0, int(after_count) - int(before_count))
             session.commit()
-        return inserted, skipped, errors
+        return inserted, skipped, skipped_details, errors

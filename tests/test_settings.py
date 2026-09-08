@@ -42,6 +42,13 @@ def test_settings_defaults_to_validating_all_datasets(tmp_path: Path) -> None:
 
     assert settings.genai_validation_dataset_ids is None
     assert settings.should_validate_dataset(1) is True
+    assert settings.lookback_period == 12
+
+
+def test_settings_loads_lookback_period_from_environment(tmp_path: Path) -> None:
+    settings = Settings(project_root=tmp_path, _env_file=None, lookback_period=18)
+
+    assert settings.lookback_period == 18
 
 
 def test_settings_accepts_a_single_or_json_list_of_genai_dataset_ids(tmp_path: Path) -> None:
