@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        default="public/dashboard.json",
+        default="public/paisometro-dashboard.json",
         help="Destination JSON file.",
     )
     parser.add_argument(
