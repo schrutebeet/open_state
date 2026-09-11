@@ -31,7 +31,11 @@ def test_snapshot_keeps_latest_distinct_periods_per_indicator(tmp_path: Path) ->
             """
         )
         connection.executemany(
-            "INSERT INTO observations (id, indicator_id, period_start, period_end, retrieved_at, status) VALUES (?, ?, ?, ?, ?, ?)",
+            """
+            INSERT INTO observations
+                (id, indicator_id, period_start, period_end, retrieved_at, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
             [
                 (1, 1, "2026-01-01", "2026-01-31", "2026-02-01", "published"),
                 (2, 1, "2026-02-01", "2026-02-28", "2026-03-01", "published"),
@@ -53,3 +57,44 @@ def test_snapshot_keeps_latest_distinct_periods_per_indicator(tmp_path: Path) ->
         assert connection.execute(
             "SELECT indicator_id, COUNT(*) FROM observations GROUP BY indicator_id"
         ).fetchall() == [(1, 2), (2, 2)]
+
+
+def test_snapshot_keeps_latest_country_grade_revision_per_month(tmp_path: Path) -> None:
+    source = tmp_path / "history.db"
+    output = tmp_path / "snapshot.db"
+    with sqlite3.connect(source) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE indicators (id INTEGER PRIMARY KEY, frequency TEXT NOT NULL);
+            CREATE TABLE observations (
+                id INTEGER PRIMARY KEY, indicator_id INTEGER NOT NULL, period_start TEXT NOT NULL,
+                period_end TEXT NOT NULL, retrieved_at TEXT NOT NULL, status TEXT NOT NULL,
+                frequency TEXT NOT NULL
+            );
+            CREATE TABLE observation_dependencies (
+                id INTEGER PRIMARY KEY, observation_id INTEGER NOT NULL,
+                depends_on_observation_id INTEGER NOT NULL
+            );
+            CREATE TABLE country_grades (
+                id INTEGER PRIMARY KEY, grade_code TEXT NOT NULL, geography TEXT NOT NULL,
+                methodology_version TEXT NOT NULL, period_start TEXT NOT NULL,
+                period_end TEXT NOT NULL,
+                calculated_at TEXT NOT NULL
+            );
+            """
+        )
+        connection.executemany(
+            "INSERT INTO country_grades VALUES (?, 'country_conditions', 'ES', 'v1', ?, ?, ?)",
+            [
+                (1, "2026-06-01", "2026-06-30", "2026-07-01"),
+                (2, "2026-07-01", "2026-07-31", "2026-08-01"),
+                (3, "2026-07-01", "2026-07-31", "2026-08-02"),
+                (4, "2026-08-01", "2026-08-31", "2026-09-01"),
+            ],
+        )
+
+    assert create_snapshot(source, output, 2) == 0
+    with sqlite3.connect(output) as connection:
+        assert connection.execute(
+            "SELECT id, period_end FROM country_grades ORDER BY id"
+        ).fetchall() == [(4, "2026-08-31")]

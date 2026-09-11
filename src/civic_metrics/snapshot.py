@@ -37,7 +37,8 @@ def create_snapshot(source: Path, output: Path, lookback: int) -> int:
             origin.backup(target)
             target.execute("PRAGMA journal_mode = DELETE")
             target.execute("PRAGMA foreign_keys = ON")
-            target.execute("""
+            target.execute(
+                """
                 CREATE TEMP TABLE retained_observations AS
                 WITH latest_per_period AS (
                     SELECT o.id, o.indicator_id, o.period_end, o.retrieved_at,
@@ -56,7 +57,9 @@ def create_snapshot(source: Path, output: Path, lookback: int) -> int:
                     FROM latest_per_period WHERE revision_rank = 1
                 )
                 SELECT id FROM ranked_periods WHERE period_rank <= ?
-            """, (lookback,))
+            """,
+                (lookback,),
+            )
             target.execute("""
                 DELETE FROM observation_dependencies
                 WHERE observation_id NOT IN (SELECT id FROM retained_observations)
@@ -65,6 +68,19 @@ def create_snapshot(source: Path, output: Path, lookback: int) -> int:
             target.execute(
                 "DELETE FROM observations WHERE id NOT IN (SELECT id FROM retained_observations)"
             )
+            if target.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='country_grades'"
+            ).fetchone():
+                target.execute(
+                    """
+                    DELETE FROM country_grades
+                    WHERE id != (
+                        SELECT id FROM country_grades
+                        ORDER BY period_end DESC, calculated_at DESC, id DESC
+                        LIMIT 1
+                    )
+                    """,
+                )
             target.commit()
             count = int(target.execute("SELECT COUNT(*) FROM observations").fetchone()[0])
         # Close connections before replacing the file (required on Windows).

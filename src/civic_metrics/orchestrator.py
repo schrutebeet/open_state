@@ -54,6 +54,7 @@ class PipelineResult:
     derived_skipped: int = 0
     derived_skipped_details: list[str] = field(default_factory=list)
     derived_errors: list[str] = field(default_factory=list)
+    country_grade: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -66,6 +67,7 @@ class PipelineResult:
             "derived_skipped": self.derived_skipped,
             "derived_skipped_details": self.derived_skipped_details,
             "derived_errors": self.derived_errors,
+            "country_grade": self.country_grade,
         }
 
 
