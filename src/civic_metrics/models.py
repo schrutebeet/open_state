@@ -198,3 +198,25 @@ class ObservationDependency(Base):
     depends_on_observation_id: Mapped[int] = mapped_column(
         ForeignKey("observations.id"), index=True
     )
+
+
+class CountryGrade(Base):
+    """One reproducible point-in-time country conditions grade per reference month."""
+
+    __tablename__ = "country_grades"
+    __table_args__ = (UniqueConstraint("input_signature"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    grade_code: Mapped[str] = mapped_column(String(120), index=True)
+    geography: Mapped[str] = mapped_column(String(20), default="ES")
+    period_start: Mapped[date] = mapped_column(Date, index=True)
+    period_end: Mapped[date] = mapped_column(Date, index=True)
+    formula: Mapped[str] = mapped_column(Text)
+    formula_with_values: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    coverage: Mapped[Decimal] = mapped_column(Numeric(8, 6))
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    methodology_version: Mapped[str] = mapped_column(String(80))
+    inputs_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    input_signature: Mapped[str] = mapped_column(String(64))

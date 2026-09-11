@@ -6,6 +6,7 @@ import logging
 import sqlite3
 import sys
 from contextlib import closing
+from datetime import date
 from pathlib import Path
 
 from filelock import FileLock, Timeout
@@ -15,6 +16,7 @@ from civic_metrics.catalog import load_catalog
 from civic_metrics.db import create_database_engine, init_database, make_session_factory
 from civic_metrics.logging_config import configure_logging
 from civic_metrics.orchestrator import PipelineOrchestrator
+from civic_metrics.processors.country_grade import materialise_country_grade
 from civic_metrics.settings import Settings
 from civic_metrics.snapshot import create_snapshot, validate_snapshot_paths
 
@@ -42,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the run summary as JSON.",
     )
+    parser.add_argument(
+        "--generate-country-grade",
+        action="store_true",
+        help="Generate the country conditions grade without downloading source data.",
+    )
     return parser
 
 
@@ -52,6 +59,10 @@ def run_pipeline(
 ) -> int:
     args = build_parser().parse_args(argv)
     root = (project_root or Path.cwd()).resolve()
+    if args.generate_country_grade:
+        grade = generate_contry_grade(project_root=root)
+        print(json.dumps(grade, indent=2, ensure_ascii=False, default=str))
+        return 0
     settings = Settings(project_root=root, _env_file=root / ".env")
     configure_logging(settings.log_level)
     database_url = make_url(settings.resolved_database_url())
@@ -76,6 +87,8 @@ def run_pipeline(
                 init_database(engine)
                 factory = make_session_factory(engine)
                 result = PipelineOrchestrator(settings, catalog, factory).run(args.dataset)
+                with factory.begin() as session:
+                    result.country_grade = materialise_country_grade(session)
                 if history_path is not None:
                     create_snapshot(history_path, snapshot_path, settings.lookback_period)
                     snapshot_counts = _snapshot_indicator_counts(snapshot_path)
@@ -112,6 +125,49 @@ def run_pipeline(
     return 0
 
 
+def generate_contry_grade(
+    *,
+    project_root: Path | None = None,
+    today: date | None = None,
+) -> dict[str, object]:
+    """Generate and persist the grade for the calendar month before *today*.
+
+    The spelling is retained as the public function requested by the project.
+    ``generate_country_grade`` below is the correctly spelled alias.
+    """
+    root = (project_root or Path.cwd()).resolve()
+    settings = Settings(project_root=root, _env_file=root / ".env")
+    database_url = make_url(settings.resolved_database_url())
+    history_path = (
+        Path(database_url.database)
+        if database_url.get_backend_name() == "sqlite"
+        and database_url.database not in (None, "", ":memory:")
+        else None
+    )
+    snapshot_path = settings.resolved_snapshot_db_path()
+    if history_path is not None:
+        validate_snapshot_paths(history_path, snapshot_path)
+    lock_path = settings.project_root / "data" / "pipeline.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with FileLock(lock_path, timeout=0):
+            engine = create_database_engine(settings.resolved_database_url())
+            try:
+                init_database(engine)
+                with make_session_factory(engine).begin() as session:
+                    grade = materialise_country_grade(session, today=today)
+                if history_path is not None:
+                    create_snapshot(history_path, snapshot_path, settings.lookback_period)
+                return grade
+            finally:
+                engine.dispose()
+    except Timeout as exc:
+        raise RuntimeError(f"Another pipeline run already holds {lock_path}") from exc
+
+
+generate_country_grade = generate_contry_grade
+
+
 def _print_summary(summary: dict[str, object]) -> None:
     print(f"Civic Metrics run #{summary['run_id']}: {summary['status']}")
     datasets = summary.get("datasets", [])
@@ -132,9 +188,7 @@ def _print_summary(summary: dict[str, object]) -> None:
                 extracted_count = (
                     extracted.get(indicator_code, 0) if isinstance(extracted, dict) else 0
                 )
-                history_count = (
-                    history.get(indicator_code, 0) if isinstance(history, dict) else 0
-                )
+                history_count = history.get(indicator_code, 0) if isinstance(history, dict) else 0
                 snapshot_count = (
                     snapshot.get(indicator_code, 0) if isinstance(snapshot, dict) else 0
                 )
@@ -153,9 +207,7 @@ def _print_summary(summary: dict[str, object]) -> None:
             )
         elif isinstance(validation, list):
             statuses = ", ".join(
-                str(entry.get("status"))
-                for entry in validation
-                if isinstance(entry, dict)
+                str(entry.get("status")) for entry in validation if isinstance(entry, dict)
             )
             print(f"             GenAI validation: {statuses}")
     print(
@@ -167,6 +219,13 @@ def _print_summary(summary: dict[str, object]) -> None:
     if isinstance(skipped_details, list):
         for detail in skipped_details:
             print(f"    Derived skipped: {detail}")
+    grade = summary.get("country_grade")
+    if isinstance(grade, dict):
+        print(
+            "  Country grade: "
+            f"{grade.get('status')} | {grade.get('period_start')}..{grade.get('period_end')} | "
+            f"result: {grade.get('result')} | coverage: {grade.get('coverage')}"
+        )
 
 
 def _snapshot_indicator_counts(path: Path) -> dict[tuple[str, str], int]:
