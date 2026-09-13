@@ -86,6 +86,8 @@ class IndicatorDefinition(BaseModel):
     code: str
     name: str
     description: str
+    name_es: str | None = None
+    description_es: str | None = None
     category: str
     subcategory: str = "general"
     dataset: str | None = None

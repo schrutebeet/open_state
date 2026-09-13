@@ -9,6 +9,8 @@ def test_catalog_has_unique_references() -> None:
     assert len(catalog.datasets) == 217
     assert len(catalog.indicators) == 471
     assert len({item.code for item in catalog.indicators}) == len(catalog.indicators)
+    assert all(item.name_es and item.description_es for item in catalog.indicators)
+    assert catalog.indicator_by_code["gdp_nominal"].name_es == "PIB nominal"
     assert catalog.indicator_by_code["goods_trade_balance"].formula == (
         "goods_exports - goods_imports"
     )
