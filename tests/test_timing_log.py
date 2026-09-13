@@ -82,19 +82,19 @@ def test_run_summary_prints_dataset_timing_and_log_path(capsys) -> None:
     assert "Dataset timing log: data/dataset_timings_run_17.csv" in output
 
 
-def test_run_report_explains_partial_availability_and_ends_with_source_url(tmp_path: Path) -> None:
+def test_run_report_explains_short_source_history_and_ends_with_source_url(tmp_path: Path) -> None:
     report_path = _write_run_report(
         tmp_path,
         50,
         {
             "run_id": 17,
-            "status": "partial",
+            "status": "success",
             "started_at": "2026-09-13T10:00:00+00:00",
             "finished_at": "2026-09-13T10:00:03+00:00",
             "datasets": [
                 {
                     "dataset": "demo_dataset",
-                    "status": "partial",
+                    "status": "success",
                     "extracted_by_indicator": {"demo_indicator": 20},
                     "requested_by_indicator": {"demo_indicator": 50},
                     "history_by_indicator": {"demo_indicator": 20},
