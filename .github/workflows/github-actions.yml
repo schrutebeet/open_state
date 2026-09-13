@@ -73,14 +73,42 @@ jobs:
 
       - name: Restore latest database from R2
         run: |
+          RESTORED_HISTORY_PATH="${HISTORY_DB_PATH}.restored"
+          RESTORE_ERROR="$(mktemp)"
+          rm -f "$RESTORED_HISTORY_PATH"
           if aws s3 cp \
             "s3://${R2_PRIVATE_BUCKET}/history.db" \
-            "$HISTORY_DB_PATH" \
-            --endpoint-url "$R2_ENDPOINT_URL"; then
-            echo "Restored the complete historical database from R2."
+            "$RESTORED_HISTORY_PATH" \
+            --endpoint-url "$R2_ENDPOINT_URL" 2>"$RESTORE_ERROR"; then
+            python - "$RESTORED_HISTORY_PATH" <<'PY'
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          database = Path(sys.argv[1])
+          with sqlite3.connect(database) as connection:
+              result = connection.execute("PRAGMA quick_check").fetchone()
+              observations = connection.execute(
+                  "SELECT COUNT(*) FROM observations"
+              ).fetchone()[0]
+          if not result or result[0] != "ok":
+              raise SystemExit(f"Restored history failed SQLite integrity check: {result}")
+          print(f"Validated restored history: {observations} observations")
+          PY
+            mv -f "$RESTORED_HISTORY_PATH" "$HISTORY_DB_PATH"
+            rm -f "$RESTORE_ERROR"
+            echo "Restored and validated the complete historical database from R2."
           else
-            echo "No historical database exists in R2; starting a new history database."
-            rm -f "$HISTORY_DB_PATH"
+            if grep -Eqi 'NoSuchKey|Not Found|404|does not exist' "$RESTORE_ERROR"; then
+              echo "No historical database exists in R2; starting a new history database."
+              rm -f "$HISTORY_DB_PATH" "$HISTORY_DB_PATH-wal" "$HISTORY_DB_PATH-shm"
+              rm -f "$RESTORED_HISTORY_PATH" "$RESTORE_ERROR"
+            else
+              echo "::error::Could not restore history.db from R2; refusing to replace history."
+              cat "$RESTORE_ERROR" >&2
+              rm -f "$RESTORED_HISTORY_PATH" "$RESTORE_ERROR"
+              exit 1
+            fi
           fi
 
       - name: Verify restored database history
