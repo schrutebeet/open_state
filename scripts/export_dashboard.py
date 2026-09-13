@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from civic_metrics.catalog import load_catalog
 
 SPAIN_TIMEZONE = ZoneInfo("Europe/Madrid")
 REQUIRED_CODES = {
@@ -109,6 +110,9 @@ def export_dashboard(database: Path, output: Path, history_limit: int) -> None:
     if history_limit < 1:
         raise SystemExit("--history-limit must be at least 1")
 
+    config_dir = Path(__file__).resolve().parents[1] / "config"
+    indicator_definitions = load_catalog(config_dir).indicator_by_code
+
     with sqlite3.connect(database) as connection:
         connection.row_factory = sqlite3.Row
         indicator_rows = connection.execute(
@@ -143,11 +147,19 @@ def export_dashboard(database: Path, output: Path, history_limit: int) -> None:
             history = _observations(connection, row["id"], history_limit)
             if not history:
                 continue
+            definition = indicator_definitions.get(row["code"])
+            if definition is None or not definition.name_es or not definition.description_es:
+                raise SystemExit(
+                    "Refusing to publish: Spanish name or description is missing for "
+                    f"indicator {row['code']}"
+                )
             latest = history[-1]
             indicators[row["code"]] = {
                 "code": row["code"],
                 "name": row["name"],
                 "description": row["description"],
+                "nameEs": definition.name_es,
+                "descriptionEs": definition.description_es,
                 "category": row["category_code"],
                 "categoryName": row["category_name"],
                 "subcategory": row["subcategory"],

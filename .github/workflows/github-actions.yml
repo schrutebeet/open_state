@@ -241,6 +241,16 @@ jobs:
           )
           if not dashboard.get("indicators"):
               raise SystemExit("Generated dashboard JSON contains no indicators")
+          untranslated = [
+              code
+              for code, indicator in dashboard["indicators"].items()
+              if not indicator.get("nameEs") or not indicator.get("descriptionEs")
+          ]
+          if untranslated:
+              raise SystemExit(
+                  "Generated dashboard JSON is missing Spanish text for: "
+                  + ", ".join(untranslated)
+              )
           print(
               "Generated dashboard JSON from the current snapshot: "
               f"{len(dashboard['indicators'])} indicators"
