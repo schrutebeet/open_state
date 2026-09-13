@@ -6,7 +6,7 @@ import logging
 import sqlite3
 import sys
 from contextlib import closing
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from filelock import FileLock, Timeout
@@ -102,6 +102,11 @@ def run_pipeline(
                         }
                 else:
                     LOGGER.warning("Automatic snapshot requires a file-backed SQLite database")
+                result.run_report_path = _write_run_report(
+                    settings.project_root,
+                    settings.lookback_period,
+                    result.to_dict(),
+                )
             finally:
                 engine.dispose()
     except Timeout:
@@ -210,6 +215,18 @@ def _print_summary(summary: dict[str, object]) -> None:
                 str(entry.get("status")) for entry in validation if isinstance(entry, dict)
             )
             print(f"             GenAI validation: {statuses}")
+        warnings = item.get("warnings", [])
+        if isinstance(warnings, list):
+            for warning in warnings:
+                print(f"             Warning: {warning}")
+        request_attempts = int(item.get("http_request_count", 0) or 0)
+        request_seconds = float(item.get("http_elapsed_seconds", 0.0) or 0.0)
+        dataset_seconds = float(item.get("dataset_elapsed_seconds", 0.0) or 0.0)
+        print(
+            f"             Timing: {request_attempts} HTTP attempts / "
+            f"{request_seconds:.3f}s waiting for responses; "
+            f"{dataset_seconds:.3f}s total for dataset"
+        )
     print(
         "  Derived: "
         f"{summary.get('derived_inserted', 0)} materialised, "
@@ -226,6 +243,93 @@ def _print_summary(summary: dict[str, object]) -> None:
             f"{grade.get('status')} | {grade.get('period_start')}..{grade.get('period_end')} | "
             f"result: {grade.get('result')} | coverage: {grade.get('coverage')}"
         )
+    timing_log_path = summary.get("timing_log_path")
+    if timing_log_path:
+        print(f"  Dataset timing log: {timing_log_path}")
+    run_report_path = summary.get("run_report_path")
+    if run_report_path:
+        print(f"  Run report: {run_report_path}")
+
+
+def _write_run_report(
+    project_root: Path,
+    lookback_period: int,
+    summary: dict[str, object],
+) -> str | None:
+    """Write a concise, human-readable record of one completed pipeline run."""
+    try:
+        started_at = datetime.fromisoformat(str(summary["started_at"]))
+        timestamp = started_at.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+        output = project_root / "data" / f"run_report_{summary['run_id']}_{timestamp}.txt"
+        datasets = summary.get("datasets", [])
+        assert isinstance(datasets, list)
+        lines = [
+            "CIVIC METRICS - RUN REPORT",
+            f"Run: {summary['run_id']}",
+            f"Status: {summary['status']}",
+            f"Started: {summary['started_at']}",
+            f"Collection completed: {summary['finished_at']}",
+            f"Report generated: {datetime.now(UTC).isoformat()}",
+            f"LOOKBACK_PERIOD requested: {lookback_period} observations per indicator",
+            f"Datasets processed: {len(datasets)}",
+        ]
+        for item in datasets:
+            if not isinstance(item, dict):
+                continue
+            lines.extend(("", f"[{str(item.get('status', '')).upper()}] {item.get('dataset')}"))
+            extracted = item.get("extracted_by_indicator", {})
+            requested = item.get("requested_by_indicator", {})
+            history = item.get("history_by_indicator", {})
+            snapshot = item.get("snapshot_by_indicator", {})
+            if isinstance(extracted, dict):
+                lines.append("Indicators:")
+                for indicator_code, extracted_count in extracted.items():
+                    requested_count = (
+                        requested.get(indicator_code, lookback_period)
+                        if isinstance(requested, dict)
+                        else lookback_period
+                    )
+                    history_count = (
+                        history.get(indicator_code, 0) if isinstance(history, dict) else 0
+                    )
+                    snapshot_count = (
+                        snapshot.get(indicator_code, 0) if isinstance(snapshot, dict) else 0
+                    )
+                    lines.append(
+                        f"  - {indicator_code}: requested {requested_count}; "
+                        f"extracted {extracted_count}; history DB written {history_count}; "
+                        f"snapshot DB contains {snapshot_count}"
+                    )
+            error = item.get("error")
+            if error:
+                lines.append(f"Issue: {error}")
+            warnings = item.get("warnings", [])
+            if isinstance(warnings, list):
+                for warning in warnings:
+                    lines.append(f"Warning: {warning}")
+            http_seconds = round(float(item.get("http_elapsed_seconds", 0.0) or 0.0))
+            minutes, seconds = divmod(http_seconds, 60)
+            lines.append(f"HTTP request duration: {minutes} mins, {seconds} segs.")
+            source_urls = item.get("source_urls", [])
+            if not isinstance(source_urls, list) or not source_urls:
+                lines.append("Source URL: not available")
+            else:
+                lines.append("Source URL(s):")
+                lines.extend(f"  {url}" for url in source_urls)
+        lines.extend(
+            (
+                "",
+                "DERIVED INDICATORS",
+                f"Materialised: {summary.get('derived_inserted', 0)}",
+                f"Skipped: {summary.get('derived_skipped', 0)}",
+            )
+        )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return str(output.resolve())
+    except (KeyError, OSError, ValueError):
+        LOGGER.exception("Could not write human-readable run report")
+        return None
 
 
 def _snapshot_indicator_counts(path: Path) -> dict[tuple[str, str], int]:

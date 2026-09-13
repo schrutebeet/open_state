@@ -114,4 +114,5 @@ def test_run_report_explains_partial_availability_and_ends_with_source_url(tmp_p
     assert "LOOKBACK_PERIOD requested: 50 observations per indicator" in report
     assert "requested 50; extracted 20; history DB written 20" in report
     assert "Warning: Only 20 of 50 requested periods" in report
+    assert "HTTP request duration: 0 mins, 1 segs." in report
     assert "Source URL(s):\n  https://example.test/source.xlsx\n\nDERIVED INDICATORS" in report
