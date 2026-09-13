@@ -60,6 +60,47 @@ def test_derived_indicator_reuses_stored_observations() -> None:
             )
         ).all()
         assert len(dependencies) == 2
-        assert session.scalar(
-            select(Indicator.code).join(Observation).where(Observation.id == observation.id)
-        ) == "goods_trade_balance"
+        assert (
+            session.scalar(
+                select(Indicator.code).join(Observation).where(Observation.id == observation.id)
+            )
+            == "goods_trade_balance"
+        )
+
+
+def test_employment_rate_55_74_is_population_weighted_from_official_age_bands() -> None:
+    catalog = load_catalog(Path("config"))
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    init_database(engine)
+    factory = make_session_factory(engine)
+    annual_period = Period(date(2025, 1, 1), date(2025, 12, 31), "2025", "annual")
+    inputs = {
+        "employment_count_55_64_detail": Decimal("1000"),
+        "employment_count_65_74_detail": Decimal("100"),
+        "employment_rate_over_55": Decimal("60"),
+        "employment_rate_65_74_detail": Decimal("10"),
+    }
+
+    with factory() as session:
+        sync_catalog(session, catalog)
+        for indicator_code, value in inputs.items():
+            save_observation(
+                session,
+                ObservationCandidate(
+                    indicator_code=indicator_code,
+                    source_code="eurostat",
+                    dataset_code="test_fixture",
+                    period=annual_period,
+                    value=value,
+                    unit="test",
+                    source_series="test",
+                ),
+                None,
+            )
+
+        result = DerivedIndicatorEngine(session).materialise(
+            catalog.indicator_by_code["employment_rate_age_55_74"]
+        )
+
+        assert result is not None
+        assert abs(Decimal(str(result.value)) - Decimal("41.25")) < Decimal("0.000001")

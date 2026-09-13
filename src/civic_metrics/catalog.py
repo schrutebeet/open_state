@@ -47,6 +47,8 @@ class ExtractionDefinition(BaseModel):
         "html_regex",
         "excel_label",
         "aeat_tax_revenue",
+        "eurostat_jsonstat",
+        "world_bank_indicator",
         "social_security_affiliates",
         "social_security_minimum_supplements",
         "derived",
@@ -62,6 +64,22 @@ class ExtractionDefinition(BaseModel):
     column_include: list[str] = Field(default_factory=list)
     multiplier: str = "1"
     value_regex: str | None = None
+    dimension_filters: dict[str, str] = Field(default_factory=dict)
+    eurostat_calculation: Literal[
+        "value",
+        "ratio",
+        "ratio_percent",
+        "difference",
+        "sum",
+        "ratio_sum_percent",
+        "range",
+        "coefficient_variation",
+    ] = "value"
+    eurostat_operands: dict[str, dict[str, str]] = Field(default_factory=dict)
+    eurostat_aggregate_dimension: str | None = None
+    eurostat_aggregate_prefix: str | None = None
+    eurostat_aggregate_code_length: int | None = None
+    eurostat_latest_dimension: str | None = None
 
 
 class IndicatorDefinition(BaseModel):

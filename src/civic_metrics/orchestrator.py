@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import csv
+import json
 import logging
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
+from time import perf_counter
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
@@ -41,6 +45,13 @@ class DatasetResult:
     artifact_path: str | None = None
     error: str | None = None
     genai_validation: dict[str, object] | list[dict[str, object]] | None = None
+    requested_by_indicator: dict[str, int] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    source_urls: list[str] = field(default_factory=list)
+    http_request_count: int = 0
+    http_elapsed_seconds: float = 0.0
+    http_request_timings: list[dict[str, object]] = field(default_factory=list)
+    dataset_elapsed_seconds: float = 0.0
 
 
 @dataclass
@@ -55,6 +66,8 @@ class PipelineResult:
     derived_skipped_details: list[str] = field(default_factory=list)
     derived_errors: list[str] = field(default_factory=list)
     country_grade: dict[str, object] | None = None
+    timing_log_path: str | None = None
+    run_report_path: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -68,6 +81,8 @@ class PipelineResult:
             "derived_skipped_details": self.derived_skipped_details,
             "derived_errors": self.derived_errors,
             "country_grade": self.country_grade,
+            "timing_log_path": self.timing_log_path,
+            "run_report_path": self.run_report_path,
         }
 
 
@@ -107,12 +122,30 @@ class PipelineOrchestrator:
                 ]
                 if not indicators:
                     continue
-                result = self._run_dataset(
-                    run_id,
-                    dataset_definition,
-                    indicators,
-                    http,
+                dataset_started = perf_counter()
+                with http.measure_dataset(dataset_definition.code):
+                    result = self._run_dataset(
+                        run_id,
+                        dataset_definition,
+                        indicators,
+                        http,
+                    )
+                result.dataset_elapsed_seconds = round(perf_counter() - dataset_started, 6)
+                timings = http.dataset_request_timings(dataset_definition.code)
+                result.http_request_count = len(timings)
+                result.http_elapsed_seconds = round(
+                    sum(timing.elapsed_seconds for timing in timings), 6
                 )
+                result.http_request_timings = [
+                    {
+                        "method": timing.method,
+                        "url": timing.url,
+                        "elapsed_seconds": round(timing.elapsed_seconds, 6),
+                        "status_code": timing.status_code,
+                        "error": timing.error,
+                    }
+                    for timing in timings
+                ]
                 results.append(result)
                 if result.status == "failed" and self.settings.fail_fast:
                     break
@@ -138,6 +171,12 @@ class PipelineOrchestrator:
         else:
             status = "partial"
         finished_at = datetime.now(UTC)
+        timing_log_path = self._write_timing_log(
+            self.settings.project_root,
+            run_id,
+            started_at,
+            results,
+        )
         pipeline_result = PipelineResult(
             run_id=run_id,
             status=status,
@@ -148,6 +187,7 @@ class PipelineOrchestrator:
             derived_skipped=derived_skipped,
             derived_skipped_details=derived_skipped_details,
             derived_errors=derived_errors,
+            timing_log_path=timing_log_path,
         )
         with self.session_factory() as session:
             run = session.get(IngestionRun, run_id)
@@ -157,6 +197,53 @@ class PipelineOrchestrator:
                 run.summary_json = pipeline_result.to_dict()
                 session.commit()
         return pipeline_result
+
+    @staticmethod
+    def _write_timing_log(
+        project_root: Path,
+        run_id: int,
+        started_at: datetime,
+        datasets: list[DatasetResult],
+    ) -> str | None:
+        timestamp = started_at.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+        output = project_root / "data" / f"dataset_timings_run_{run_id}_{timestamp}.csv"
+        try:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with output.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=(
+                        "run_id",
+                        "dataset",
+                        "status",
+                        "http_request_attempts",
+                        "http_elapsed_seconds",
+                        "dataset_elapsed_seconds",
+                        "http_attempt_details",
+                        "error",
+                    ),
+                )
+                writer.writeheader()
+                for dataset in datasets:
+                    writer.writerow(
+                        {
+                            "run_id": run_id,
+                            "dataset": dataset.dataset,
+                            "status": dataset.status,
+                            "http_request_attempts": dataset.http_request_count,
+                            "http_elapsed_seconds": dataset.http_elapsed_seconds,
+                            "dataset_elapsed_seconds": dataset.dataset_elapsed_seconds,
+                            "http_attempt_details": json.dumps(
+                                dataset.http_request_timings,
+                                ensure_ascii=False,
+                            ),
+                            "error": dataset.error or "",
+                        }
+                    )
+            return str(output.resolve())
+        except OSError:
+            LOGGER.exception("Could not write dataset timing log to %s", output)
+            return None
 
     def _run_dataset(
         self,
@@ -173,6 +260,10 @@ class PipelineOrchestrator:
                 required=definition.required,
                 expected_indicators=len(indicators),
                 error=f"Unknown connector {definition.connector}",
+                requested_by_indicator={
+                    item.code: self.settings.lookback_period for item in indicators
+                },
+                source_urls=[definition.endpoint] if definition.endpoint else [],
             )
         connector = connector_type()
         try:
@@ -191,6 +282,7 @@ class PipelineOrchestrator:
                 indicators,
             )
             candidates = [candidate for _, rows in documents for candidate in rows]
+            source_urls = self._source_urls(definition, documents)
             validations = []
             with self.session_factory() as session:
                 dataset_row = session.scalar(
@@ -294,15 +386,38 @@ class PipelineOrchestrator:
             expected_codes = {item.code for item in indicators}
             extracted_codes = {item.indicator_code for item in candidates}
             missing_codes = sorted(expected_codes - extracted_codes)
+            requested_by_indicator = {
+                item.code: self.settings.lookback_period for item in indicators
+            }
+            availability_warnings = [
+                (
+                    f"Only {extracted_by_indicator[indicator.code]} of "
+                    f"{requested_by_indicator[indicator.code]} requested periods were available "
+                    "from the source."
+                )
+                for indicator in indicators
+                if (
+                    0
+                    < extracted_by_indicator[indicator.code]
+                    < requested_by_indicator[indicator.code]
+                )
+            ]
             if not candidates:
                 status = "empty"
                 error = "No observations matched the configured selectors"
             elif missing_codes:
                 status = "partial"
                 error = f"Missing indicators: {', '.join(missing_codes)}"
+            elif availability_warnings:
+                # The source returned valid observations, just not the full
+                # requested history. Preserve the data and mark it explicitly.
+                status = "partial"
+                error = None
             else:
                 status = "success"
                 error = None
+            for warning in availability_warnings:
+                LOGGER.warning("dataset=%s %s", definition.code, warning)
             genai_validation = None
             if validations:
                 genai_validation = [item.to_dict() for item in validations]
@@ -349,6 +464,9 @@ class PipelineOrchestrator:
                 artifact_path=path,
                 error=error,
                 genai_validation=validation_output,
+                requested_by_indicator=requested_by_indicator,
+                warnings=availability_warnings,
+                source_urls=source_urls,
             )
         except MissingCredentialsError as exc:
             LOGGER.warning("Dataset %s skipped: %s", definition.code, exc)
@@ -358,6 +476,10 @@ class PipelineOrchestrator:
                 required=definition.required,
                 expected_indicators=len(indicators),
                 error=str(exc),
+                requested_by_indicator={
+                    item.code: self.settings.lookback_period for item in indicators
+                },
+                source_urls=[definition.endpoint] if definition.endpoint else [],
             )
         except Exception as exc:  # keep independent sources isolated
             LOGGER.exception("Dataset %s failed", definition.code)
@@ -367,7 +489,26 @@ class PipelineOrchestrator:
                 required=definition.required,
                 expected_indicators=len(indicators),
                 error=f"{type(exc).__name__}: {exc}",
+                requested_by_indicator={
+                    item.code: self.settings.lookback_period for item in indicators
+                },
+                source_urls=[definition.endpoint] if definition.endpoint else [],
             )
+
+    @staticmethod
+    def _source_urls(
+        definition: DatasetDefinition,
+        documents: list[tuple[object, object]],
+    ) -> list[str]:
+        """Return ordered, distinct evidence URLs for a dataset result."""
+        urls: list[str] = []
+        for payload, _ in documents:
+            source_url = getattr(payload, "source_url", None)
+            if isinstance(source_url, str) and source_url and source_url not in urls:
+                urls.append(source_url)
+        if not urls and definition.endpoint:
+            urls.append(definition.endpoint)
+        return urls
 
     def _run_derived(self) -> tuple[int, int, list[str], list[str]]:
         inserted = 0

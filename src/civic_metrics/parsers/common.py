@@ -141,6 +141,13 @@ def period_from_datetime(
         end_month = start_month + 2
         end = date(value.year, end_month, calendar.monthrange(value.year, end_month)[1])
         return Period(start, end, f"{value.year}-Q{quarter}", frequency)
+    if frequency == "semiannual":
+        half = 1 if value.month <= 6 else 2
+        start_month = 1 if half == 1 else 7
+        end_month = start_month + 5
+        start = date(value.year, start_month, 1)
+        end = date(value.year, end_month, calendar.monthrange(value.year, end_month)[1])
+        return Period(start, end, f"{value.year}-S{half}", frequency)
     if frequency == "annual":
         return Period(date(value.year, 1, 1), date(value.year, 12, 31), str(value.year), frequency)
     return Period(value, value, value.isoformat(), frequency)
@@ -155,11 +162,12 @@ def period_from_label(label: str, default_frequency: str) -> Period:
         month = int(compact_month.group(2))
         return period_from_datetime(datetime(year, month, 1, tzinfo=UTC), "monthly")
 
-    # Common Spanish quarterly labels: 2T 2026, T2 2026, 2026T2, Q2 2026.
+    # Common Spanish quarterly labels: 2T 2026, T2 2026, 2026T2, Q2 2026,
+    # and Eurostat's ISO-like 1998-Q1 format.
     quarter_patterns = (
-        r"\b([1-4])\s*(?:t|q)\D*(20\d{2})\b",
-        r"\b(?:q|t|trimestre)\s*([1-4])\D*(20\d{2})\b",
-        r"\b(20\d{2})\D*(?:q|t)\s*([1-4])\b",
+        r"\b([1-4])\s*(?:t|q)\D*((?:19|20)\d{2})\b",
+        r"\b(?:q|t|trimestre)\s*([1-4])\D*((?:19|20)\d{2})\b",
+        r"\b((?:19|20)\d{2})\D*(?:q|t)\s*([1-4])\b",
     )
     for index, pattern in enumerate(quarter_patterns):
         match = re.search(pattern, text)
@@ -171,6 +179,12 @@ def period_from_label(label: str, default_frequency: str) -> Period:
             year, quarter = int(match.group(1)), int(match.group(2))
         month = (quarter - 1) * 3 + 1
         return period_from_datetime(datetime(year, month, 1, tzinfo=UTC), "quarterly")
+
+    semester_match = re.search(r"\b((?:19|20)\d{2})[-_/ ]?s([12])\b", text)
+    if semester_match and default_frequency == "semiannual":
+        year, semester = int(semester_match.group(1)), int(semester_match.group(2))
+        month = 1 if semester == 1 else 7
+        return period_from_datetime(datetime(year, month, 1, tzinfo=UTC), "semiannual")
 
     year_match = re.search(r"\b(?:19|20)\d{2}\b", text)
     month_number: int | None = None
@@ -244,6 +258,4 @@ def prior_period(period: Period) -> Period:
             datetime(end_previous.year, end_previous.month, 1, tzinfo=UTC),
             "quarterly",
         )
-    return period_from_datetime(
-        datetime(period.start.year - 1, 1, 1, tzinfo=UTC), "annual"
-    )
+    return period_from_datetime(datetime(period.start.year - 1, 1, 1, tzinfo=UTC), "annual")
