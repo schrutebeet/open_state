@@ -2,29 +2,66 @@ from __future__ import annotations
 
 import calendar
 import io
+import logging
 import os
 import shutil
 import subprocess
 import tempfile
-from zipfile import BadZipFile
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
-from typing import Any
 from pathlib import Path
+from typing import Any
+from zipfile import BadZipFile
 
-import pandas as pd
+import httpx
 import openpyxl
+import pandas as pd
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 from civic_metrics.catalog import DatasetDefinition, IndicatorDefinition
+from civic_metrics.connectors.base import ConnectorContext
 from civic_metrics.connectors.html_excel import HtmlExcelConnector
 from civic_metrics.domain import DatasetPayload, ObservationCandidate, Period
+from civic_metrics.http import HttpClient
 from civic_metrics.parsers.common import SPANISH_MONTHS, normalise_text, parse_decimal
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SepeRegisteredUnemploymentConnector(HtmlExcelConnector):
     connector_name = "sepe_registered_unemployment"
+
+    def fetch(self, dataset: DatasetDefinition, context: ConnectorContext) -> DatasetPayload:
+        try:
+            return super().fetch(dataset, context)
+        except httpx.HTTPStatusError as listing_error:
+            fallback_url = dataset.config.get("fallback_url")
+            if (
+                not fallback_url
+                or listing_error.response.status_code not in HttpClient.RETRYABLE_STATUS_CODES
+            ):
+                raise
+
+            LOGGER.warning(
+                "SEPE listing returned HTTP %s; trying the configured official workbook URL",
+                listing_error.response.status_code,
+            )
+            try:
+                response = context.http.get(str(fallback_url))
+            except httpx.HTTPError as fallback_error:
+                raise fallback_error from listing_error
+
+            return context.http.payload(
+                dataset.code,
+                dataset.source,
+                response,
+                {
+                    "listing_url": dataset.endpoint,
+                    "selected_link_text": "SEPE official monthly unemployment workbook (fallback)",
+                    "history_periods": context.settings.lookback_period,
+                },
+            )
 
     @staticmethod
     def _is_missing(value: Any) -> bool:
