@@ -31,6 +31,14 @@ sources:
   name: Servicio Público de Empleo Estatal
   base_url: https://www.sepe.es
   institution_type: government
+- code: eurostat
+  name: Eurostat
+  base_url: https://ec.europa.eu/eurostat
+  institution_type: supranational_statistics_office
+- code: world_bank
+  name: World Bank Open Data
+  base_url: https://api.worldbank.org/v2
+  institution_type: international_organisation
 datasets:
 - code: ine_gdp_current_prices
   source: ine
@@ -95,6 +103,13 @@ datasets:
     - DTNPDE2010_F20000_PS_APU
     - DTNPDE2010_F30000_PS_APU
     - DTNPDE2010_F40000_PS_APU
+- code: bde_mortgage_rates
+  source: bde
+  connector: bde_series
+  endpoint: https://app.bde.es/bierest/resources/srdatosapp/listaSeries
+  config:
+    series:
+    - DN_1TI2T0002
 - code: datacomex_total_trade
   source: datacomex
   connector: datacomex
@@ -211,8 +226,1609 @@ datasets:
   connector: sepe_registered_unemployment
   endpoint: https://www.sepe.es/HomeSepe/que-es-el-sepe/estadisticas/datos-avance/paro.html
   config:
+    fallback_url: https://www.sepe.es/SiteSepe/contenidos/que_es_el_sepe/estadisticas/datos_avance/xls/empleo/evolparo.xls
     link_include:
     - Evoluci.n mensual del paro
     extensions:
     - .xls
     - .xlsx
+- code: eurostat_hicp_components
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_manr
+  config:
+    dataset_id: prc_hicp_manr
+    query:
+      geo: ES
+- code: eurostat_population_indicators
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjanind
+  config:
+    dataset_id: demo_pjanind
+    query:
+      geo: ES
+- code: eurostat_population_by_age_sex
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan
+  config:
+    dataset_id: demo_pjan
+    query:
+      geo: ES
+- code: eurostat_life_expectancy
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_mlexpec
+  config:
+    dataset_id: demo_mlexpec
+    query:
+      geo: ES
+- code: eurostat_fertility
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_find
+  config:
+    dataset_id: demo_find
+    query:
+      geo: ES
+- code: eurostat_labour_force_employment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsi_emp_a
+  config:
+    dataset_id: lfsi_emp_a
+    query:
+      geo: ES
+- code: eurostat_unemployment_rate
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/une_rt_a
+  config:
+    dataset_id: une_rt_a
+    query:
+      geo: ES
+- code: eurostat_temporary_employment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_etgar
+  config:
+    dataset_id: lfsa_etgar
+    query:
+      geo: ES
+- code: eurostat_part_time_employment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_eppga
+  config:
+    dataset_id: lfsa_eppga
+    query:
+      geo: ES
+- code: eurostat_long_term_unemployment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/une_ltu_a
+  config:
+    dataset_id: une_ltu_a
+    query:
+      geo: ES
+- code: eurostat_employment_by_education
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_ergaed
+  config:
+    dataset_id: lfsa_ergaed
+    query:
+      geo: ES
+- code: eurostat_job_vacancies
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/jvs_q_r21
+  config:
+    dataset_id: jvs_q_r21
+    query:
+      geo: ES
+- code: eurostat_worked_hours
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_ewhan2
+  config:
+    dataset_id: lfsa_ewhan2
+    query:
+      geo: ES
+- code: eurostat_work_accidents
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hsw_ph3_02
+  config:
+    dataset_id: hsw_ph3_02
+    query:
+      geo: ES
+- code: eurostat_population_change
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_gind
+  config:
+    dataset_id: demo_gind
+    query:
+      geo: ES
+- code: eurostat_infant_mortality
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_minfind
+  config:
+    dataset_id: demo_minfind
+    query:
+      geo: ES
+- code: eurostat_asylum_applications
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/migr_asyappctza
+  config:
+    dataset_id: migr_asyappctza
+    query:
+      geo: ES
+- code: eurostat_healthy_life_years
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_hlye
+  config:
+    dataset_id: hlth_hlye
+    query:
+      geo: ES
+- code: eurostat_preventable_mortality
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_cd_apr
+  config:
+    dataset_id: hlth_cd_apr
+    query:
+      geo: ES
+- code: eurostat_unmet_medical_needs
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_silc_08
+  config:
+    dataset_id: hlth_silc_08
+    query:
+      geo: ES
+- code: eurostat_hospital_beds
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_rs_bdsrg
+  config:
+    dataset_id: hlth_rs_bdsrg
+    query:
+      geo: ES
+- code: eurostat_health_professionals
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_rs_prsrg
+  config:
+    dataset_id: hlth_rs_prsrg
+    query:
+      geo: ES
+- code: eurostat_depressive_symptoms
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_ehis_mh1e
+  config:
+    dataset_id: hlth_ehis_mh1e
+    query:
+      geo: ES
+- code: eurostat_obesity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_ehis_bm1e
+  config:
+    dataset_id: hlth_ehis_bm1e
+    query:
+      geo: ES
+- code: eurostat_smoking
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_ehis_sk1e
+  config:
+    dataset_id: hlth_ehis_sk1e
+    query:
+      geo: ES
+- code: eurostat_in_work_poverty
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_iw01
+  config:
+    dataset_id: ilc_iw01
+    query:
+      geo: ES
+- code: eurostat_poverty_rate
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_li02
+  config:
+    dataset_id: ilc_li02
+    query:
+      geo: ES
+- code: eurostat_housing_arrears
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_mdes05
+  config:
+    dataset_id: ilc_mdes05
+    query:
+      geo: ES
+- code: eurostat_utility_arrears
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_mdes07
+  config:
+    dataset_id: ilc_mdes07
+    query:
+      geo: ES
+- code: eurostat_life_satisfaction
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_pw01
+  config:
+    dataset_id: ilc_pw01
+    query:
+      geo: ES
+- code: eurostat_poverty_reduction
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_li10
+  config:
+    dataset_id: ilc_li10
+    query:
+      geo: ES
+- code: eurostat_gender_pension_gap
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_pnp13
+  config:
+    dataset_id: ilc_pnp13
+    query:
+      geo: ES
+- code: eurostat_overcrowding
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_lvho05a
+  config:
+    dataset_id: ilc_lvho05a
+    query:
+      geo: ES
+- code: eurostat_material_deprivation
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_mdsd11
+  config:
+    dataset_id: ilc_mdsd11
+    query:
+      geo: ES
+- code: eurostat_housing_cost_burden
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_lvho07a
+  config:
+    dataset_id: ilc_lvho07a
+    query:
+      geo: ES
+- code: eurostat_life_satisfaction_urbanisation
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_pw02
+  config:
+    dataset_id: ilc_pw02
+    query:
+      geo: ES
+- code: eurostat_severe_housing_deprivation
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_mdho06a
+  config:
+    dataset_id: ilc_mdho06a
+    query:
+      geo: ES
+- code: eurostat_home_ownership
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_lvho02
+  config:
+    dataset_id: ilc_lvho02
+    query:
+      geo: ES
+- code: eurostat_early_school_leavers
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/edat_lfse_14
+  config:
+    dataset_id: edat_lfse_14
+    query:
+      geo: ES
+- code: eurostat_tertiary_attainment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sdg_04_20
+  config:
+    dataset_id: sdg_04_20
+    query:
+      geo: ES
+- code: eurostat_adult_learning
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/trng_lfse_01
+  config:
+    dataset_id: trng_lfse_01
+    query:
+      geo: ES
+- code: eurostat_neet
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/edat_lfse_20
+  config:
+    dataset_id: edat_lfse_20
+    query:
+      geo: ES
+- code: eurostat_public_education_expenditure
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/gov_10a_exp
+  config:
+    dataset_id: gov_10a_exp
+    query:
+      geo: ES
+- code: eurostat_vocational_education
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_enra13
+  config:
+    dataset_id: educ_uoe_enra13
+    query:
+      geo: ES
+- code: eurostat_digital_skills
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_sk_dskl_i
+  config:
+    dataset_id: isoc_sk_dskl_i
+    query:
+      geo: ES
+- code: eurostat_greenhouse_gas
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sdg_13_10
+  config:
+    dataset_id: sdg_13_10
+    query:
+      geo: ES
+- code: eurostat_renewable_energy
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_ind_ren
+  config:
+    dataset_id: nrg_ind_ren
+    query:
+      geo: ES
+- code: eurostat_municipal_waste
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/env_wasmun
+  config:
+    dataset_id: env_wasmun
+    query:
+      geo: ES
+- code: eurostat_water_stress
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sdg_06_60
+  config:
+    dataset_id: sdg_06_60
+    query:
+      geo: ES
+- code: eurostat_circular_material_use
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/cei_srm030
+  config:
+    dataset_id: cei_srm030
+    query:
+      geo: ES
+- code: eurostat_resource_productivity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/cei_pc030
+  config:
+    dataset_id: cei_pc030
+    query:
+      geo: ES
+- code: eurostat_internet_use
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ci_ifp_iu
+  config:
+    dataset_id: isoc_ci_ifp_iu
+    query:
+      geo: ES
+- code: eurostat_online_public_services
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ciegi_ac
+  config:
+    dataset_id: isoc_ciegi_ac
+    query:
+      geo: ES
+- code: eurostat_research_expenditure
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/rd_e_gerdtot
+  config:
+    dataset_id: rd_e_gerdtot
+    query:
+      geo: ES
+- code: eurostat_patents
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/pat_ep_ntot
+  config:
+    dataset_id: pat_ep_ntot
+    query:
+      geo: ES
+- code: eurostat_online_purchases
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ec_ibuy
+  config:
+    dataset_id: isoc_ec_ibuy
+    query:
+      geo: ES
+- code: eurostat_cloud_computing
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_cicce_use
+  config:
+    dataset_id: isoc_cicce_use
+    query:
+      geo: ES
+- code: eurostat_business_ai
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_eb_ai
+  config:
+    dataset_id: isoc_eb_ai
+    query:
+      geo: ES
+- code: eurostat_ict_specialists_by_sex
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_sks_itsps
+  config:
+    dataset_id: isoc_sks_itsps
+    query:
+      geo: ES
+- code: eurostat_enterprise_e_invoicing
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_eb_ics
+  config:
+    dataset_id: isoc_eb_ics
+    query:
+      geo: ES
+- code: ine_youth_long_term_unemployment
+  source: ine
+  connector: ine_table
+  endpoint: https://servicios.ine.es/wstempus/js/ES/DATOS_TABLA
+  config:
+    table_id: 67577
+- code: eurostat_employment_age_counts
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_egan
+  config:
+    dataset_id: lfsa_egan
+    query:
+      geo: ES
+- code: eurostat_employment_age_rates
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_ergan
+  config:
+    dataset_id: lfsa_ergan
+    query:
+      geo: ES
+- code: eurostat_physicians_by_category
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_rs_physcat
+  config:
+    dataset_id: hlth_rs_physcat
+    query:
+      geo: ES
+- code: eurostat_energy_intensity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_ind_ei
+  config:
+    dataset_id: nrg_ind_ei
+    query:
+      geo: ES
+- code: eurostat_passenger_cars_per_capita
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/road_eqs_carhab
+  config:
+    dataset_id: road_eqs_carhab
+    query:
+      geo: ES
+- code: eurostat_population_birth_country
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/migr_pop3ctb
+  config:
+    dataset_id: migr_pop3ctb
+    query:
+      geo: ES
+- code: eurostat_labour_slack
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsi_sup_a
+  config:
+    dataset_id: lfsi_sup_a
+    query:
+      geo: ES
+- code: eurostat_ses_earnings
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/earn_ses_monthly
+  config:
+    dataset_id: earn_ses_monthly
+    query:
+      geo: ES
+- code: eurostat_labour_cost_index
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lc_lci_r2_q
+  config:
+    dataset_id: lc_lci_r2_q
+    query:
+      geo: ES
+- code: eurostat_housing_permits
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_cobp_q
+  config:
+    dataset_id: sts_cobp_q
+    query:
+      geo: ES
+- code: eurostat_services_turnover
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_setu_m
+  config:
+    dataset_id: sts_setu_m
+    query:
+      geo: ES
+- code: eurostat_hotel_occupancy
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tour_occ_mnor
+  config:
+    dataset_id: tour_occ_mnor
+    query:
+      geo: ES
+- code: eurostat_fertility_by_age
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_frate
+  config:
+    dataset_id: demo_frate
+    query:
+      geo: ES
+- code: eurostat_hospital_discharges
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_co_disch1
+  config:
+    dataset_id: hlth_co_disch1
+    query:
+      geo: ES
+- code: eurostat_road_fatalities
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tran_sf_roadus
+  config:
+    dataset_id: tran_sf_roadus
+    query:
+      geo: ES
+- code: eurostat_enterprise_digital_intensity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_e_dii
+  config:
+    dataset_id: isoc_e_dii
+    query:
+      geo: ES
+- code: eurostat_enterprise_cybersecurity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_cisce_ra
+  config:
+    dataset_id: isoc_cisce_ra
+    query:
+      geo: ES
+- code: eurostat_ecommerce_by_size
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ec_esels
+  config:
+    dataset_id: isoc_ec_esels
+    query:
+      geo: ES
+- code: eurostat_protected_areas
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sdg_15_20
+  config:
+    dataset_id: sdg_15_20
+    query:
+      geo: ES
+- code: eurostat_social_protection_expenditure
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/spr_exp_type
+  config:
+    dataset_id: spr_exp_type
+    query:
+      geo: ES
+- code: eurostat_manufacturing_turnover
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_intv_m
+  config:
+    dataset_id: sts_intv_m
+    query:
+      geo: ES
+- code: eurostat_enterprise_websites
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ciweb
+  config:
+    dataset_id: isoc_ciweb
+    query:
+      geo: ES
+- code: eurostat_ecommerce_turnover
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ec_evaln2
+  config:
+    dataset_id: isoc_ec_evaln2
+    query:
+      geo: ES
+- code: eurostat_maritime_freight
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/mar_go_aa
+  config:
+    dataset_id: mar_go_aa
+    query:
+      rep_mar: ES
+- code: eurostat_rail_network_length
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/rail_if_line_tr
+  config:
+    dataset_id: rail_if_line_tr
+    query:
+      geo: ES
+- code: eurostat_motorway_length
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/road_if_motorwa
+  config:
+    dataset_id: road_if_motorwa
+    query:
+      geo: ES
+- code: eurostat_non_motorway_road_length
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/road_if_roadsc
+  config:
+    dataset_id: road_if_roadsc
+    query:
+      geo: ES
+- code: eurostat_education_finance
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_fine06
+  config:
+    dataset_id: educ_uoe_fine06
+    query:
+      geo: ES
+- code: eurostat_tourism_expenditure
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tour_dem_extot
+  config:
+    dataset_id: tour_dem_extot
+    query:
+      geo: ES
+- code: eurostat_student_mobility
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_mobs02
+  config:
+    dataset_id: educ_uoe_mobs02
+    query:
+      geo: ES
+- code: world_bank_pm25_exposure
+  source: world_bank
+  connector: world_bank_indicator
+  endpoint: https://api.worldbank.org/v2/country/ESP/indicator/EN.ATM.PM25.MC.M3
+  config:
+    indicator_id: EN.ATM.PM25.MC.M3
+- code: world_bank_maternal_mortality
+  source: world_bank
+  connector: world_bank_indicator
+  endpoint: https://api.worldbank.org/v2/country/ESP/indicator/SH.STA.MMRT
+  config:
+    indicator_id: SH.STA.MMRT
+- code: world_bank_measles_vaccination
+  source: world_bank
+  connector: world_bank_indicator
+  endpoint: https://api.worldbank.org/v2/country/ESP/indicator/SH.IMM.MEAS
+  config:
+    indicator_id: SH.IMM.MEAS
+- code: eurostat_tertiary_enrolment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_enrt01
+  config:
+    dataset_id: educ_uoe_enrt01
+    query:
+      geo: ES
+- code: eurostat_dental_needs
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_silc_09
+  config:
+    dataset_id: hlth_silc_09
+    query:
+      geo: ES
+- code: eurostat_perceived_health
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_silc_10
+  config:
+    dataset_id: hlth_silc_10
+    query:
+      geo: ES
+- code: eurostat_longstanding_illness
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_silc_11
+  config:
+    dataset_id: hlth_silc_11
+    query:
+      geo: ES
+- code: eurostat_cause_specific_mortality
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_cd_asdr2
+  config:
+    dataset_id: hlth_cd_asdr2
+    query:
+      geo: ES
+- code: eurostat_hospital_discharges
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_co_disch1
+  config:
+    dataset_id: hlth_co_disch1
+    query:
+      geo: ES
+- code: eurostat_hospital_stay
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_co_inpst
+  config:
+    dataset_id: hlth_co_inpst
+    query:
+      geo: ES
+- code: eurostat_health_financing
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_sha11_hf
+  config:
+    dataset_id: hlth_sha11_hf
+    query:
+      geo: ES
+- code: eurostat_emissions_by_sector
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/env_air_gge
+  config:
+    dataset_id: env_air_gge
+    query:
+      geo: ES
+- code: eurostat_water_abstraction
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/env_wat_abs
+  config:
+    dataset_id: env_wat_abs
+    query:
+      geo: ES
+- code: eurostat_organic_farming
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/org_cropar
+  config:
+    dataset_id: org_cropar
+    query:
+      geo: ES
+- code: eurostat_final_energy
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_bal_s
+  config:
+    dataset_id: nrg_bal_s
+    query:
+      geo: ES
+- code: eurostat_household_energy
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_d_hhq
+  config:
+    dataset_id: nrg_d_hhq
+    query:
+      geo: ES
+- code: eurostat_energy_import_dependency
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_ind_id
+  config:
+    dataset_id: nrg_ind_id
+    query:
+      geo: ES
+- code: eurostat_energy_capacity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_inf_epc
+  config:
+    dataset_id: nrg_inf_epc
+    query:
+      geo: ES
+- code: eurostat_electricity_prices
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_pc_204
+  config:
+    dataset_id: nrg_pc_204
+    query:
+      geo: ES
+- code: eurostat_gas_prices
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_pc_202
+  config:
+    dataset_id: nrg_pc_202
+    query:
+      geo: ES
+- code: eurostat_industry_energy
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_bal_s
+  config:
+    dataset_id: nrg_bal_s
+    query:
+      geo: ES
+- code: eurostat_agricultural_nutrients
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/aei_pr_gnb
+  config:
+    dataset_id: aei_pr_gnb
+    query:
+      geo: ES
+- code: eurostat_pesticide_sales
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/aei_fm_salpest09
+  config:
+    dataset_id: aei_fm_salpest09
+    query:
+      geo: ES
+- code: eurostat_agricultural_area
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/apro_cpnhr
+  config:
+    dataset_id: apro_cpnhr
+    query:
+      geo: ES
+- code: eurostat_population_citizenship
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/migr_pop1ctz
+  config:
+    dataset_id: migr_pop1ctz
+    query:
+      geo: ES
+- code: eurostat_population_structure
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan
+  config:
+    dataset_id: demo_pjan
+    query:
+      geo: ES
+- code: eurostat_marriages
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_nind
+  config:
+    dataset_id: demo_nind
+    query:
+      geo: ES
+- code: eurostat_equivalised_income
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_di03
+  config:
+    dataset_id: ilc_di03
+    query:
+      geo: ES
+- code: eurostat_income_inequality
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_di12
+  config:
+    dataset_id: ilc_di12
+    query:
+      geo: ES
+- code: eurostat_income_quintile_ratio
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_di11
+  config:
+    dataset_id: ilc_di11
+    query:
+      geo: ES
+- code: eurostat_at_risk_of_poverty
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_peps01n
+  config:
+    dataset_id: ilc_peps01n
+    query:
+      geo: ES
+- code: eurostat_gender_pay_gap
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/earn_gr_gpgr2
+  config:
+    dataset_id: earn_gr_gpgr2
+    query:
+      geo: ES
+- code: eurostat_energy_poverty
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_mdes01
+  config:
+    dataset_id: ilc_mdes01
+    query:
+      geo: ES
+- code: eurostat_house_prices
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hpi_q
+  config:
+    dataset_id: prc_hpi_q
+    query:
+      geo: ES
+- code: eurostat_education_enrolment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_enra21
+  config:
+    dataset_id: educ_uoe_enra21
+    query:
+      geo: ES
+- code: eurostat_tertiary_students
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_enrt01
+  config:
+    dataset_id: educ_uoe_enrt01
+    query:
+      geo: ES
+- code: eurostat_tertiary_graduates
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_grad01
+  config:
+    dataset_id: educ_uoe_grad01
+    query:
+      geo: ES
+- code: eurostat_stem_graduates
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_grad02
+  config:
+    dataset_id: educ_uoe_grad02
+    query:
+      geo: ES
+- code: eurostat_international_students
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_mobs02
+  config:
+    dataset_id: educ_uoe_mobs02
+    query:
+      geo: ES
+- code: eurostat_education_financing
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_fine06
+  config:
+    dataset_id: educ_uoe_fine06
+    query:
+      geo: ES
+- code: eurostat_foreign_languages
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_lang01
+  config:
+    dataset_id: educ_uoe_lang01
+    query:
+      geo: ES
+- code: eurostat_low_education
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/edat_lfse_14
+  config:
+    dataset_id: edat_lfse_14
+    query:
+      geo: ES
+- code: eurostat_industrial_production
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_inpr_m
+  config:
+    dataset_id: sts_inpr_m
+    query:
+      geo: ES
+- code: eurostat_retail_trade
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_trtu_m
+  config:
+    dataset_id: sts_trtu_m
+    query:
+      geo: ES
+- code: eurostat_forest_area
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/for_area
+  config:
+    dataset_id: for_area
+    query:
+      geo: ES
+- code: eurostat_air_passengers
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/avia_paoc
+  config:
+    dataset_id: avia_paoc
+    query:
+      geo: ES
+- code: eurostat_rail_passengers
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/rail_pa_typepas
+  config:
+    dataset_id: rail_pa_typepas
+    query:
+      lang: en
+      geo: ES
+- code: eurostat_regional_gdp_per_capita
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nama_10r_3gdp
+  config:
+    dataset_id: nama_10r_3gdp
+    query:
+      lang: en
+      freq: A
+      unit: EUR_HAB
+- code: eurostat_regional_unemployment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfst_r_lfu3rt
+  config:
+    dataset_id: lfst_r_lfu3rt
+    query:
+      lang: en
+      freq: A
+      isced11: TOTAL
+      sex: T
+      unit: PC
+- code: eurostat_divorce_indicators
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_ndivind
+  config:
+    dataset_id: demo_ndivind
+    query:
+      geo: ES
+- code: eurostat_languages_studied
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_lang02
+  config:
+    dataset_id: educ_uoe_lang02
+    query:
+      geo: ES
+- code: eurostat_wastewater_connection
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sdg_06_20
+  config:
+    dataset_id: sdg_06_20
+    query:
+      geo: ES
+- code: eurostat_hospital_bed_days
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_co_hosday
+  config:
+    dataset_id: hlth_co_hosday
+    query:
+      freq: A
+      age: TOTAL
+      indic_he: DAY_HOSP
+      unit: NR
+      sex: T
+      icd10: A-T_Z
+      geo: ES
+- code: eurostat_mip_indicators
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/mips_sa
+  config:
+    dataset_id: mips_sa
+    query:
+      freq: A
+      indic: IND_H
+      geo: ES
+- code: eurostat_labour_market_slack
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsi_sla_a
+  config:
+    dataset_id: lfsi_sla_a
+    query:
+      lang: en
+      geo: ES
+- code: eurostat_material_footprint
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/env_ac_rme
+  config:
+    dataset_id: env_ac_rme
+    query:
+      lang: en
+      freq: A
+      unit: T_HAB
+      material: TOTAL
+      indic_env: RMC
+      geo: ES
+- code: eurostat_farm_income
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/aact_eaa06
+  config:
+    dataset_id: aact_eaa06
+    query:
+      lang: en
+      freq: A
+      indic_agr: RFI_AWU_CLV
+      unit: CLV20_EUR_AWU
+      geo: ES
+- code: eurostat_fish_landings
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/fish_ld_main
+  config:
+    dataset_id: fish_ld_main
+    query:
+      lang: en
+      freq: A
+      pres: TOTAL
+      species: F00
+      natvessr: TOTAL
+      dest_use: TOTAL
+      unit: TPW
+      geo: ES
+- code: eurostat_rail_freight
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/rail_go_total
+  config:
+    dataset_id: rail_go_total
+    query:
+      geo: ES
+- code: eurostat_road_freight
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/road_go_ta_tott
+  config:
+    dataset_id: road_go_ta_tott
+    query:
+      geo: ES
+- code: eurostat_road_vehicles
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/road_eqs_carhab
+  config:
+    dataset_id: road_eqs_carhab
+    query:
+      geo: ES
+- code: eurostat_homicide
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/crim_hom_soff
+  config:
+    dataset_id: crim_hom_soff
+    query:
+      geo: ES
+- code: eurostat_tourism_nights
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tour_occ_nin2
+  config:
+    dataset_id: tour_occ_nin2
+    query:
+      geo: ES
+- code: eurostat_tourism_arrivals
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tour_occ_arnat
+  config:
+    dataset_id: tour_occ_arnat
+    query:
+      geo: ES
+- code: eurostat_tourism_capacity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tour_cap_nat
+  config:
+    dataset_id: tour_cap_nat
+    query:
+      geo: ES
+- code: eurostat_employment_by_sector
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_egan2
+  config:
+    dataset_id: lfsa_egan2
+    query:
+      geo: ES
+- code: eurostat_unemployment_duration
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/une_ltu_a
+  config:
+    dataset_id: une_ltu_a
+    query:
+      geo: ES
+- code: eurostat_formal_childcare
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_caindformal
+  config:
+    dataset_id: ilc_caindformal
+    query:
+      geo: ES
+- code: eurostat_household_composition
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfst_hhnhwhtc
+  config:
+    dataset_id: lfst_hhnhwhtc
+    query:
+      geo: ES
+- code: eurostat_business_demography
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/bd_9bd_sz_cl_r2
+  config:
+    dataset_id: bd_9bd_sz_cl_r2
+    query:
+      geo: ES
+- code: eurostat_labour_productivity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nama_10_lp_ulc
+  config:
+    dataset_id: nama_10_lp_ulc
+    query:
+      geo: ES
+- code: eurostat_pension_replacement
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/ilc_pnp3
+  config:
+    dataset_id: ilc_pnp3
+    query:
+      geo: ES
+- code: eurostat_senior_employment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsi_emp_a
+  config:
+    dataset_id: lfsi_emp_a
+    query:
+      geo: ES
+- code: eurostat_business_ecommerce
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ec_eseln2
+  config:
+    dataset_id: isoc_ec_eseln2
+    query:
+      geo: ES
+- code: eurostat_monthly_tourism_nights
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tour_occ_nim
+  config:
+    dataset_id: tour_occ_nim
+    query:
+      geo: ES
+- code: eurostat_industrial_electricity_prices
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nrg_pc_205
+  config:
+    dataset_id: nrg_pc_205
+    query:
+      geo: ES
+- code: eurostat_industrial_producer_prices
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_inpp_m
+  config:
+    dataset_id: sts_inpp_m
+    query:
+      geo: ES
+- code: eurostat_population_density
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_r_d3dens
+  config:
+    dataset_id: demo_r_d3dens
+    query:
+      geo: ES
+- code: eurostat_hospital_beds
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/hlth_rs_bdsrg
+  config:
+    dataset_id: hlth_rs_bdsrg
+    query:
+      geo: ES
+- code: eurostat_business_investment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sbs_na_sca_r2
+  config:
+    dataset_id: sbs_na_sca_r2
+    query:
+      geo: ES
+- code: eurostat_ict_specialists
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_sks_itspt
+  config:
+    dataset_id: isoc_sks_itspt
+    query:
+      geo: ES
+- code: eurostat_passenger_transport_modes
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tran_hv_psmod
+  config:
+    dataset_id: tran_hv_psmod
+    query:
+      geo: ES
+- code: eurostat_research_personnel
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/rd_p_persocc
+  config:
+    dataset_id: rd_p_persocc
+    query:
+      geo: ES
+- code: eurostat_age4_enrolment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_enra10
+  config:
+    dataset_id: educ_uoe_enra10
+    query:
+      geo: ES
+- code: eurostat_adult_education
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/edat_lfse_03
+  config:
+    dataset_id: edat_lfse_03
+    query:
+      geo: ES
+- code: eurostat_lower_secondary_pupils
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_enrs01
+  config:
+    dataset_id: educ_uoe_enrs01
+    query:
+      geo: ES
+- code: eurostat_teaching_staff
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/educ_uoe_perp01
+  config:
+    dataset_id: educ_uoe_perp01
+    query:
+      geo: ES
+- code: eurostat_self_employment
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_esgaed
+  config:
+    dataset_id: lfsa_esgaed
+    query:
+      geo: ES
+- code: eurostat_multiple_jobs
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsa_e2ged
+  config:
+    dataset_id: lfsa_e2ged
+    query:
+      geo: ES
+- code: eurostat_labour_force_activity
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/lfsi_emp_a
+  config:
+    dataset_id: lfsi_emp_a
+    query:
+      geo: ES
+- code: eurostat_national_accounts_per_capita
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nama_10_pc
+  config:
+    dataset_id: nama_10_pc
+    query:
+      geo: ES
+- code: eurostat_national_accounts_growth
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nama_10_gdp
+  config:
+    dataset_id: nama_10_gdp
+    query:
+      geo: ES
+- code: eurostat_household_saving
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nasq_10_ki
+  config:
+    dataset_id: nasq_10_ki
+    query:
+      geo: ES
+- code: eurostat_sector_debt
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nasq_10_f_bs
+  config:
+    dataset_id: nasq_10_f_bs
+    query:
+      geo: ES
+- code: eurostat_construction_production
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_copr_m
+  config:
+    dataset_id: sts_copr_m
+    query:
+      geo: ES
+- code: eurostat_construction_cost
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/sts_copi_q
+  config:
+    dataset_id: sts_copi_q
+    query:
+      geo: ES
+- code: eurostat_government_finances
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/gov_10a_main
+  config:
+    dataset_id: gov_10a_main
+    query:
+      geo: ES
+- code: eurostat_edp_finances
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/gov_10dd_edpt1
+  config:
+    dataset_id: gov_10dd_edpt1
+    query:
+      geo: ES
+- code: eurostat_tax_revenue
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/gov_10a_taxag
+  config:
+    dataset_id: gov_10a_taxag
+    query:
+      geo: ES
+- code: eurostat_internet_use
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ci_ifp_iu
+  config:
+    dataset_id: isoc_ci_ifp_iu
+    query:
+      geo: ES
+- code: eurostat_online_public_services
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ciegi_ac
+  config:
+    dataset_id: isoc_ciegi_ac
+    query:
+      geo: ES
+- code: eurostat_research_expenditure
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/rd_e_gerdtot
+  config:
+    dataset_id: rd_e_gerdtot
+    query:
+      geo: ES
+- code: eurostat_patents
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/pat_ep_ntot
+  config:
+    dataset_id: pat_ep_ntot
+    query:
+      geo: ES
+- code: eurostat_online_purchases
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_ec_ibuy
+  config:
+    dataset_id: isoc_ec_ibuy
+    query:
+      geo: ES
+- code: eurostat_cloud_computing
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_cicce_use
+  config:
+    dataset_id: isoc_cicce_use
+    query:
+      geo: ES
+- code: eurostat_business_ai
+  source: eurostat
+  connector: eurostat_jsonstat
+  endpoint: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/isoc_eb_ai
+  config:
+    dataset_id: isoc_eb_ai
+    query:
+      geo: ES

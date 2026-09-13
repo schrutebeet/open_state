@@ -15,3 +15,27 @@ categories:
     name: Pensions
     description: Pension beneficiaries, pension amounts, payroll and system ratios.
     display_order: 40
+  - code: demography
+    name: Demography
+    description: Population structure, longevity and fertility.
+    display_order: 50
+  - code: health
+    name: Health
+    description: Health outcomes, access to care, healthcare resources and health behaviours.
+    display_order: 60
+  - code: social_cohesion
+    name: Income, living conditions and housing
+    description: Poverty, material deprivation, housing conditions, care and subjective wellbeing.
+    display_order: 70
+  - code: education
+    name: Education and skills
+    description: Educational attainment, learning, inclusion and digital capabilities.
+    display_order: 80
+  - code: environment
+    name: Environment and energy
+    description: Climate, renewable energy, resource use, waste and water pressure.
+    display_order: 90
+  - code: digital
+    name: Digitalisation and innovation
+    description: Digital inclusion, online public services, business technology adoption and research.
+    display_order: 100
