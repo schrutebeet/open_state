@@ -31,7 +31,7 @@ class BdeSeriesConnector(Connector):
                 "idioma": "es",
                 "series": ",".join(series),
                 # BdE only accepts predefined ranges. Keep the complete series;
-                # LOOKBACK_PERIOD is applied by the snapshot and JSON export.
+                # the history database intentionally retains all observations.
                 "rango": "MAX",
             },
         )
@@ -50,25 +50,28 @@ class BdeSeriesConnector(Connector):
     ) -> list[ObservationCandidate]:
         document = json.loads(payload.body.decode("utf-8-sig"))
         series_items = self._series_items(document)
-        by_code = {
-            str(item.get("serie") or item.get("code")): item
-            for item in series_items
-        }
+        by_code = {str(item.get("serie") or item.get("code")): item for item in series_items}
         results: list[ObservationCandidate] = []
         for indicator in indicators:
             code = indicator.extraction.series_code
             if not code or code not in by_code:
-                LOGGER.warning("BdE response did not contain series %s for %s", code, indicator.code)
+                LOGGER.warning(
+                    "BdE response did not contain series %s for %s", code, indicator.code
+                )
                 continue
             item = by_code[code]
             dates = item.get("fechas") or item.get("dates") or []
             values = item.get("valores") or item.get("values") or []
             multiplier = Decimal(indicator.extraction.multiplier)
+            parsed_rows = []
             for raw_date, raw_value in zip(dates, values, strict=False):
                 if raw_value in (None, "", "-"):
                     continue
                 parsed_date = date_parser.parse(str(raw_date))
                 period = period_from_datetime(parsed_date, indicator.frequency)
+                parsed_rows.append((period, raw_value))
+            parsed_rows.sort(key=lambda row: row[0].end)
+            for period, raw_value in parsed_rows:
                 results.append(
                     ObservationCandidate(
                         indicator_code=indicator.code,

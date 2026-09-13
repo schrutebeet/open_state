@@ -94,11 +94,7 @@ class HtmlExcelConnector(Connector):
             if len(bucket) < target
         }
         if missing:
-            raise LookupError(
-                f"Only { {code: target - missing_count for code, missing_count in missing.items()} } "
-                f"of {target} requested periods found for {dataset.code}; "
-                "the source did not expose distinct historical files"
-            )
+            self._warn_incomplete_history(dataset.code, target, periods)
         if not documents:
             raise LookupError(f"No historical files found for {dataset.code}")
         return documents
@@ -185,7 +181,34 @@ class HtmlExcelConnector(Connector):
 
         if not documents:
             raise LookupError(f"No historical files found for {dataset.code}")
+        self._warn_incomplete_history(dataset.code, target, periods)
         return documents
+
+    @staticmethod
+    def _warn_incomplete_history(
+        dataset_code: str,
+        requested_periods: int,
+        periods: dict[str, set[tuple[object, object]]],
+    ) -> None:
+        """Report a short official archive without failing the whole dataset.
+
+        Historical portals often publish fewer distinct workbooks than requested.
+        The rows that were found remain valid and are persisted; this is an
+        availability warning, not a parsing or transport error.
+        """
+        found = {
+            indicator_code: len(indicator_periods)
+            for indicator_code, indicator_periods in periods.items()
+            if len(indicator_periods) < requested_periods
+        }
+        if found:
+            LOGGER.warning(
+                "Historical source has fewer periods than requested for dataset=%s: "
+                "requested=%s, found=%s. Continuing with the available official data.",
+                dataset_code,
+                requested_periods,
+                found,
+            )
 
     @staticmethod
     def _get_named_page(page, expected_label, context):
@@ -386,8 +409,15 @@ class HtmlExcelConnector(Connector):
                     row_include=extraction.row_include,
                     column_include=extraction.column_include,
                 )
-            except LookupError:
-                LOGGER.exception("Could not extract %s from %s", indicator.code, dataset.code)
+            except LookupError as exc:
+                # A historic archive can contain similarly named workbooks with a
+                # different layout. It is expected while scanning candidate files.
+                LOGGER.warning(
+                    "Skipping document for indicator=%s dataset=%s: %s",
+                    indicator.code,
+                    dataset.code,
+                    exc,
+                )
                 continue
 
             period = self._infer_period(dataset, payload, workbook, match.column_label, match.sheet, indicator.frequency)
