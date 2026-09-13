@@ -226,6 +226,7 @@ datasets:
   connector: sepe_registered_unemployment
   endpoint: https://www.sepe.es/HomeSepe/que-es-el-sepe/estadisticas/datos-avance/paro.html
   config:
+    allow_stale_on_transient_error: true
     fallback_url: https://www.sepe.es/SiteSepe/contenidos/que_es_el_sepe/estadisticas/datos_avance/xls/empleo/evolparo.xls
     link_include:
     - Evoluci.n mensual del paro
