@@ -153,6 +153,15 @@ def export_dashboard(database: Path, output: Path, history_limit: int) -> None:
                     "Refusing to publish: Spanish name or description is missing for "
                     f"indicator {row['code']}"
                 )
+            if not (
+                definition.onboarding.profiles
+                and definition.onboarding.relevant_areas
+                and definition.onboarding.objectives
+            ):
+                raise SystemExit(
+                    "Refusing to publish: onboarding options are incomplete for "
+                    f"indicator {row['code']}"
+                )
             latest = history[-1]
             indicators[row["code"]] = {
                 "code": row["code"],
@@ -160,6 +169,11 @@ def export_dashboard(database: Path, output: Path, history_limit: int) -> None:
                 "description": row["description"],
                 "nameEs": definition.name_es,
                 "descriptionEs": definition.description_es,
+                "onboarding": {
+                    "profiles": definition.onboarding.profiles,
+                    "relevantAreas": definition.onboarding.relevant_areas,
+                    "objectives": definition.onboarding.objectives,
+                },
                 "category": row["category_code"],
                 "categoryName": row["category_name"],
                 "subcategory": row["subcategory"],

@@ -82,12 +82,19 @@ class ExtractionDefinition(BaseModel):
     eurostat_latest_dimension: str | None = None
 
 
+class IndicatorOnboarding(BaseModel):
+    profiles: list[str] = Field(default_factory=list)
+    relevant_areas: list[str] = Field(default_factory=list)
+    objectives: list[str] = Field(default_factory=list)
+
+
 class IndicatorDefinition(BaseModel):
     code: str
     name: str
     description: str
     name_es: str | None = None
     description_es: str | None = None
+    onboarding: IndicatorOnboarding = Field(default_factory=IndicatorOnboarding)
     category: str
     subcategory: str = "general"
     dataset: str | None = None

@@ -11,6 +11,27 @@ def test_catalog_has_unique_references() -> None:
     assert len({item.code for item in catalog.indicators}) == len(catalog.indicators)
     assert all(item.name_es and item.description_es for item in catalog.indicators)
     assert catalog.indicator_by_code["gdp_nominal"].name_es == "PIB nominal"
+    gdp_onboarding = catalog.indicator_by_code["gdp_nominal"].onboarding
+    assert gdp_onboarding.profiles == [
+        "Empresa / consultoría",
+        "Análisis de datos",
+        "Periodismo",
+        "Investigación",
+        "Interés personal",
+    ]
+    assert gdp_onboarding.relevant_areas == ["Economía"]
+    assert gdp_onboarding.objectives == [
+        "Investigar en profundidad",
+        "Seguir los cambios",
+        "Entender el panorama",
+        "Tomar decisiones",
+    ]
+    assert all(
+        indicator.onboarding.profiles
+        and indicator.onboarding.relevant_areas
+        and indicator.onboarding.objectives
+        for indicator in catalog.indicators
+    )
     assert catalog.indicator_by_code["goods_trade_balance"].formula == (
         "goods_exports - goods_imports"
     )

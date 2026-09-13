@@ -244,7 +244,13 @@ jobs:
           untranslated = [
               code
               for code, indicator in dashboard["indicators"].items()
-              if not indicator.get("nameEs") or not indicator.get("descriptionEs")
+              if (
+                  not indicator.get("nameEs")
+                  or not indicator.get("descriptionEs")
+                  or not indicator.get("onboarding", {}).get("profiles")
+                  or not indicator.get("onboarding", {}).get("relevantAreas")
+                  or not indicator.get("onboarding", {}).get("objectives")
+              )
           ]
           if untranslated:
               raise SystemExit(

@@ -81,3 +81,19 @@ def test_dashboard_json_includes_spanish_indicator_text(tmp_path: Path) -> None:
     assert gdp["description"] == "English description: gdp_nominal"
     assert gdp["nameEs"] == "PIB nominal"
     assert gdp["descriptionEs"]
+    assert gdp["onboarding"] == {
+        "profiles": [
+            "Empresa / consultoría",
+            "Análisis de datos",
+            "Periodismo",
+            "Investigación",
+            "Interés personal",
+        ],
+        "relevantAreas": ["Economía"],
+        "objectives": [
+            "Investigar en profundidad",
+            "Seguir los cambios",
+            "Entender el panorama",
+            "Tomar decisiones",
+        ],
+    }
