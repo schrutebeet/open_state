@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin
 
 import openpyxl
 from bs4 import BeautifulSoup
@@ -30,6 +30,61 @@ PENSIONERS_ROOT = (
     "https://www.seg-social.es/wps/portal/wss/internet/"
     "EstadisticasPresupuestosEstudios/Estadisticas/EST23"
 )
+_EXPECTED_SPANISH_AREAS = {
+    "andalucia",
+    "aragon",
+    "asturias",
+    "balears",
+    "canarias",
+    "cantabria",
+    "castilla la mancha",
+    "castilla y leon",
+    "cataluna",
+    "comunidad valenciana",
+    "extremadura",
+    "galicia",
+    "madrid",
+    "murcia",
+    "navarra",
+    "pais vasco",
+    "la rioja",
+    "ceuta",
+    "melilla",
+}
+_SPANISH_AREA_ALIASES = {
+    "andalucia": "andalucia",
+    "aragon": "aragon",
+    "asturias": "asturias",
+    "asturiasprincipadode": "asturias",
+    "ibalears": "balears",
+    "balearsilles": "balears",
+    "illesbalears": "balears",
+    "baleares": "balears",
+    "balearesilles": "balears",
+    "canarias": "canarias",
+    "cantabria": "cantabria",
+    "castillalamancha": "castilla la mancha",
+    "castillayleon": "castilla y leon",
+    "cataluna": "cataluna",
+    "cvalenciana": "comunidad valenciana",
+    "comunidadvalenciana": "comunidad valenciana",
+    "comunitatvalenciana": "comunidad valenciana",
+    "extremadura": "extremadura",
+    "galicia": "galicia",
+    "madrid": "madrid",
+    "madridcomde": "madrid",
+    "madridcomunidadde": "madrid",
+    "murcia": "murcia",
+    "murciaregionde": "murcia",
+    "navarra": "navarra",
+    "navarracomforalde": "navarra",
+    "navarracomunidadforalde": "navarra",
+    "paisvasco": "pais vasco",
+    "riojala": "la rioja",
+    "larioja": "la rioja",
+    "ceuta": "ceuta",
+    "melilla": "melilla",
+}
 
 
 class SocialSecurityPensionsConnector(HtmlExcelConnector):
@@ -59,11 +114,16 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
             page = self._get_pensioners_page(context)
             excel_url, label = self._find_pensioners_excel(page)
             response = context.http.get(excel_url)
-            payload = context.http.payload(dataset.code, dataset.source, response, {
-                "listing_url": page.source_url,
-                "selected_link_text": label,
-                "history_periods": context.settings.lookback_period,
-            })
+            payload = context.http.payload(
+                dataset.code,
+                dataset.source,
+                response,
+                {
+                    "listing_url": page.source_url,
+                    "selected_link_text": label,
+                    "history_periods": context.settings.lookback_period,
+                },
+            )
             seeded_candidates = documents[0][1]
             live_candidates = self.extract(dataset, payload, indicators)
             seeded_labels = {candidate.period.label for candidate in seeded_candidates}
@@ -72,7 +132,8 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
                 default=date.min,
             )
             live_candidates = [
-                candidate for candidate in live_candidates
+                candidate
+                for candidate in live_candidates
                 if (
                     candidate.period.label in seeded_labels
                     or candidate.period.end > latest_seeded_end
@@ -82,7 +143,8 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
             documents[0] = (
                 documents[0][0],
                 [
-                    candidate for candidate in seeded_candidates
+                    candidate
+                    for candidate in seeded_candidates
                     if candidate.period.label not in live_periods
                 ],
             )
@@ -121,15 +183,19 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
                 raise LookupError(f"No current {prefix} XLSX link found at {listing.source_url}")
             _, excel_url, label = max(links)
             response = context.http.get(excel_url)
-            payload = context.http.payload(dataset.code, dataset.source, response, {
-                "listing_url": listing.source_url,
-                "selected_link_text": label,
-            })
+            payload = context.http.payload(
+                dataset.code,
+                dataset.source,
+                response,
+                {
+                    "listing_url": listing.source_url,
+                    "selected_link_text": label,
+                },
+            )
             latest = self.extract(dataset, payload, indicators)
             latest_periods = {candidate.period.label for candidate in latest}
             seeded = [
-                candidate for candidate in seeded
-                if candidate.period.label not in latest_periods
+                candidate for candidate in seeded if candidate.period.label not in latest_periods
             ]
             return [(seed_payload, seeded), (payload, latest)]
         except (LookupError, OSError, ValueError, KeyError) as exc:
@@ -168,7 +234,8 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
                 )
                 values = {
                     row["indicator_code"]: (
-                        Decimal(row["value"]), row.get("source_series", "CSV!value")
+                        Decimal(row["value"]),
+                        row.get("source_series", "CSV!value"),
                     )
                 }
                 for candidate in cls._build_candidates(
@@ -228,13 +295,23 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
         if handler is None:
             raise ValueError(f"Unsupported pension workbook dataset {dataset.code}")
         if dataset.code == "social_security_pension_series":
-            if (
-                dataset.config.get("data_sheet") == "CA_Total sistema"
-                and "CA_Total sistema" in workbook.sheetnames
-            ):
+            data_sheet = self._find_series_data_sheet(dataset, workbook.sheetnames)
+            if data_sheet is not None:
                 period = self._period_from_workbook(workbook) or self._period_from_payload(payload)
-                return self._build_candidates(
-                    dataset, payload, indicators, period, self._extract_ca_total(workbook)
+                values = (
+                    self._extract_ca_total(workbook)
+                    if self._normalise_sheet_name(data_sheet) == "ca total sistema"
+                    else self._extract_ca_alternative_sheet(workbook[data_sheet])
+                )
+                return self._build_candidates(dataset, payload, indicators, period, values)
+            if "S_Total" not in workbook.sheetnames:
+                expected_sheets = [
+                    dataset.config.get("data_sheet", "CA_Total sistema"),
+                    *dataset.config.get("data_sheet_fallbacks", []),
+                ]
+                raise LookupError(
+                    "Could not find a pension-series data sheet; "
+                    f"expected one of {expected_sheets!r}, found {workbook.sheetnames!r}"
                 )
             rows = self._extract_series_history(workbook)
             history_periods = int(payload.metadata.get("history_periods", 12))
@@ -259,19 +336,220 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
         return self._build_candidates(dataset, payload, indicators, period, values)
 
     @staticmethod
+    def _normalise_sheet_name(name: str) -> str:
+        return normalise_text(name).replace("_", " ").rstrip(". ").strip()
+
+    @classmethod
+    def _find_series_data_sheet(
+        cls, dataset: DatasetDefinition, sheet_names: list[str]
+    ) -> str | None:
+        """Select the best known monthly-series sheet, respecting source priority."""
+        configured = [
+            dataset.config.get("data_sheet", "CA_Total sistema"),
+            *dataset.config.get("data_sheet_fallbacks", []),
+        ]
+        # Keep compatibility with portal workbook variants seen in the official
+        # archive, even if a project config predates the fallback list.
+        configured.extend(["CA2", "TOTALSISTEMA.", "TOTALSISTEMA", "Total Sistema"])
+        for expected in configured:
+            expected_text = str(expected)
+            for actual in sheet_names:
+                if actual.casefold() == expected_text.casefold():
+                    return actual
+            expected_normalised = cls._normalise_sheet_name(expected_text)
+            for actual in sheet_names:
+                if cls._normalise_sheet_name(actual) == expected_normalised:
+                    return actual
+        return None
+
+    @staticmethod
+    def _compact_header(value: object) -> str:
+        return re.sub(r"[^a-z0-9]+", "", normalise_text(value))
+
+    @classmethod
+    def _measure_columns(cls, rows: list[list[object]]) -> tuple[int, int, int, int]:
+        """Find total-pension and retirement count/average columns by headers.
+
+        Historical CA2/TOTALSISTEMA books use different column orders. The
+        measure pairs are identified under their grouped headers rather than
+        relying on fixed positions.
+        """
+        header_rows = min(25, len(rows))
+        for group_row_index in range(header_rows):
+            row = rows[group_row_index]
+            group_starts: dict[str, list[int]] = {"total": [], "retirement": []}
+            for column, value in enumerate(row):
+                key = cls._compact_header(value)
+                if key in {"totalpensiones", "totaldepensiones"}:
+                    group_starts["total"].append(column)
+                elif "jubilacion" in key:
+                    group_starts["retirement"].append(column)
+            if not group_starts["total"] or not group_starts["retirement"]:
+                continue
+
+            found: dict[str, tuple[int, int]] = {}
+            for group, starts in group_starts.items():
+                for start in starts:
+                    end_row = min(header_rows, group_row_index + 5)
+                    end_column = min(max(map(len, rows[:end_row])), start + 4)
+                    column_labels: dict[int, set[str]] = {}
+                    for header_row in rows[group_row_index:end_row]:
+                        for column in range(start, min(end_column, len(header_row))):
+                            column_labels.setdefault(column, set()).add(
+                                cls._compact_header(header_row[column])
+                            )
+                    for number_column in range(start, end_column):
+                        labels = column_labels.get(number_column, set())
+                        if not any(
+                            label == "numero" or label.startswith("numero") for label in labels
+                        ):
+                            continue
+                        for average_column in range(number_column + 1, end_column):
+                            average_labels = column_labels.get(average_column, set())
+                            if any(
+                                label.startswith("pmedia") or label.startswith("pensionmedia")
+                                for label in average_labels
+                            ):
+                                found[group] = (number_column, average_column)
+                                break
+                        if group in found:
+                            break
+                    if group in found:
+                        break
+            if "total" in found and "retirement" in found:
+                total_count, total_average = found["total"]
+                retirement_count, retirement_average = found["retirement"]
+                return total_count, total_average, retirement_count, retirement_average
+
+        raise LookupError(
+            "Could not identify Número/P.media columns under TOTAL PENSIONES and JUBILACIÓN"
+        )
+
+    @classmethod
+    def _extract_ca_alternative_sheet(cls, sheet) -> dict[str, tuple[Decimal, str]]:
+        """Extract the three pension-series indicators from a legacy sheet.
+
+        Some workbooks contain a national TOTAL row. Others contain only CCAA
+        and province rows; for those, aggregate the 17 autonomous communities
+        plus Ceuta and Melilla, excluding provinces to avoid double counting.
+        """
+        rows = [list(row) for row in sheet.iter_rows(values_only=True)]
+        (
+            total_count_column,
+            total_average_column,
+            retirement_count_column,
+            retirement_average_column,
+        ) = cls._measure_columns(rows)
+        first_measure_column = min(
+            total_count_column,
+            total_average_column,
+            retirement_count_column,
+            retirement_average_column,
+        )
+        aggregate_labels = {"total", "totalsistema", "totalnacional", "totalpensiones"}
+
+        def read_measures(row: list[object]) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+            indexes = (
+                total_count_column,
+                total_average_column,
+                retirement_count_column,
+                retirement_average_column,
+            )
+            if any(index >= len(row) for index in indexes):
+                raise ValueError("row does not contain all measure columns")
+            return tuple(parse_decimal(row[index]) for index in indexes)  # type: ignore[return-value]
+
+        for row_number, row in enumerate(rows, start=1):
+            labels = {
+                cls._compact_header(value)
+                for value in row[:first_measure_column]
+                if value not in (None, "")
+            }
+            if not labels.intersection(aggregate_labels):
+                continue
+            try:
+                (
+                    total_count,
+                    total_average,
+                    retirement_count,
+                    retirement_average,
+                ) = read_measures(row)
+            except (TypeError, ValueError):
+                continue
+            return {
+                "pension_count": (
+                    total_count,
+                    f"{sheet.title}!R{row_number}C{total_count_column + 1}",
+                ),
+                "average_pension": (
+                    total_average,
+                    f"{sheet.title}!R{row_number}C{total_average_column + 1}",
+                ),
+                "average_retirement_pension": (
+                    retirement_average,
+                    f"{sheet.title}!R{row_number}C{retirement_average_column + 1}",
+                ),
+            }
+
+        expected_areas = {cls._compact_header(area): area for area in _EXPECTED_SPANISH_AREAS}
+        observed: dict[str, tuple[Decimal, Decimal, Decimal, Decimal]] = {}
+        duplicates: set[str] = set()
+        for row in rows:
+            area = None
+            for value in row[:first_measure_column]:
+                key = cls._compact_header(value)
+                canonical = _SPANISH_AREA_ALIASES.get(key)
+                if canonical is not None:
+                    area = cls._compact_header(canonical)
+                    break
+            if area not in expected_areas:
+                continue
+            try:
+                measures = read_measures(row)
+            except (TypeError, ValueError):
+                continue
+            if area in observed:
+                duplicates.add(expected_areas[area])
+            observed[area] = measures
+
+        missing = set(expected_areas) - set(observed)
+        if missing or duplicates:
+            missing_names = sorted(expected_areas[key] for key in missing)
+            raise LookupError(
+                f"{sheet.title} has no complete national total; regional aggregation requires "
+                "exactly one valid row for each of the 19 autonomous communities/cities "
+                f"(missing={missing_names!r}, duplicate={sorted(duplicates)!r})"
+            )
+
+        total_count = sum((measures[0] for measures in observed.values()), Decimal(0))
+        retirement_count = sum((measures[2] for measures in observed.values()), Decimal(0))
+        if total_count <= 0 or retirement_count <= 0:
+            raise LookupError(f"{sheet.title} regional counts are not positive")
+        average_pension = (
+            sum((measures[0] * measures[1] for measures in observed.values()), Decimal(0))
+            / total_count
+        )
+        average_retirement = (
+            sum((measures[2] * measures[3] for measures in observed.values()), Decimal(0))
+            / retirement_count
+        )
+        provenance = f"{sheet.title}!weighted CCAA + Ceuta/Melilla (19 areas)"
+        return {
+            "pension_count": (total_count, provenance),
+            "average_pension": (average_pension, provenance),
+            "average_retirement_pension": (average_retirement, provenance),
+        }
+
+    @staticmethod
     def _period_from_workbook(workbook: openpyxl.Workbook) -> Period | None:
         """Read the publication period stated in the workbook headings."""
-        pattern = re.compile(
-            r"\b1\s+de\s+([a-záéíóúüñ]+)\s+de\s+(20\d{2})\b", re.IGNORECASE
-        )
+        pattern = re.compile(r"\b1\s+de\s+([a-záéíóúüñ]+)\s+de\s+(20\d{2})\b", re.IGNORECASE)
         for sheet in workbook.worksheets:
             for row in sheet.iter_rows(values_only=True):
                 for value in row:
                     match = pattern.search(str(value))
                     if match:
-                        return period_from_label(
-                            f"{match.group(1)} {match.group(2)}", "monthly"
-                        )
+                        return period_from_label(f"{match.group(1)} {match.group(2)}", "monthly")
         return None
 
     @staticmethod
@@ -282,6 +560,16 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
                 str(payload.metadata.get("selected_link_text", "")),
             ]
         )
+        decoded = unquote(combined)
+        legacy_match = re.search(r"CA2\((0[1-9]|1[0-2])(20\d{2})\)", decoded, re.IGNORECASE)
+        if legacy_match:
+            month, year = int(legacy_match.group(1)), int(legacy_match.group(2))
+            return Period(
+                start=date(year, month, 1),
+                end=date(year, month, calendar.monthrange(year, month)[1]),
+                label=f"{year}-{month:02d}",
+                frequency="monthly",
+            )
         match = re.search(r"(?:CA|PTAS|ICONCEPTOS|S)(20\d{2})(0[1-9]|1[0-2])", combined, re.I)
         if not match:
             raise ValueError(f"Could not infer pension workbook period from {combined!r}")
@@ -358,7 +646,8 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
                     "pension_count": (parse_decimal(values[2]), f"S_Total!R{row_number}C3"),
                     "average_pension": (parse_decimal(values[4]), f"S_Total!R{row_number}C5"),
                     "average_retirement_pension": (
-                        parse_decimal(values[10]), f"S_Total!R{row_number}C11"
+                        parse_decimal(values[10]),
+                        f"S_Total!R{row_number}C11",
                     ),
                 }
             except (TypeError, ValueError):
@@ -407,13 +696,16 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
             try:
                 return {
                     "pension_count": (
-                        parse_decimal(values[1]), f"CA_Total sistema!R{row_number}C2"
+                        parse_decimal(values[1]),
+                        f"CA_Total sistema!R{row_number}C2",
                     ),
                     "average_pension": (
-                        parse_decimal(values[3]), f"CA_Total sistema!R{row_number}C4"
+                        parse_decimal(values[3]),
+                        f"CA_Total sistema!R{row_number}C4",
                     ),
                     "average_retirement_pension": (
-                        parse_decimal(values[9]), f"CA_Total sistema!R{row_number}C10"
+                        parse_decimal(values[9]),
+                        f"CA_Total sistema!R{row_number}C10",
                     ),
                 }
             except (TypeError, ValueError):
@@ -452,9 +744,17 @@ class SocialSecurityPensionsConnector(HtmlExcelConnector):
                 continue
             try:
                 period = period_from_label(f"{values[1]} {current_year}", "monthly")
-                rows.append((period, {"pensioner_count": (
-                    parse_decimal(values[2]), f"Pnes y ptas!R{row_number}C3"
-                )}))
+                rows.append(
+                    (
+                        period,
+                        {
+                            "pensioner_count": (
+                                parse_decimal(values[2]),
+                                f"Pnes y ptas!R{row_number}C3",
+                            )
+                        },
+                    )
+                )
             except (TypeError, ValueError):
                 continue
         return sorted(rows, key=lambda item: item[0].end)

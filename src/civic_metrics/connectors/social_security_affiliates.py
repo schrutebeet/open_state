@@ -37,10 +37,20 @@ class SocialSecurityAffiliatesConnector(HtmlExcelConnector):
         payload: DatasetPayload,
         indicators: list[IndicatorDefinition],
     ) -> list[ObservationCandidate]:
-        table_sheet = str(dataset.config.get("data_sheet", "Tabla_1_5"))
+        preferred_sheet = str(dataset.config.get("data_sheet", "Tabla_1_5"))
+        fallback_sheets = [
+            str(name) for name in dataset.config.get("data_sheet_fallbacks", [])
+        ]
         book = openpyxl.load_workbook(BytesIO(payload.body), data_only=True, read_only=True)
-        if table_sheet not in book.sheetnames:
-            raise LookupError(f"Workbook does not contain expected sheet {table_sheet!r}")
+        table_sheet = next(
+            (name for name in [preferred_sheet, *fallback_sheets] if name in book.sheetnames),
+            None,
+        )
+        if table_sheet is None:
+            expected_sheets = [preferred_sheet, *fallback_sheets]
+            raise LookupError(
+                f"Workbook does not contain any expected sheet {expected_sheets!r}"
+            )
         sheet = book[table_sheet]
         rows = sheet.iter_rows(values_only=True)
         headers = next(rows, None)

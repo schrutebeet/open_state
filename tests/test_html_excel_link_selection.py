@@ -61,6 +61,33 @@ def test_named_navigation_ignores_global_navigation_links() -> None:
     ) == "https://example.test/report/valid"
 
 
+def test_named_navigation_accepts_an_alternative_label() -> None:
+    soup = BeautifulSoup(
+        '<a href="/total-system">Pensiones por CCAA y provincias. Total Sistema</a>',
+        "html.parser",
+    )
+
+    class Page:
+        source_url = "https://example.test/year"
+        body = str(soup)
+
+    class Context:
+        class Http:
+            def get(self, url):
+                return url
+
+        http = Http()
+
+    assert HtmlExcelConnector._get_named_page(
+        Page(),
+        [
+            "Pensiones por CCAA y provincias",
+            "Pensiones por CCAA y provincias. Total Sistema",
+        ],
+        Context(),
+    ) == "https://example.test/total-system"
+
+
 def test_auxiliary_navigation_url_is_rejected() -> None:
     assert HtmlExcelConnector._is_auxiliary_navigation_url(
         urlparse("https://example.test/page?changeLanguage=ca#search")

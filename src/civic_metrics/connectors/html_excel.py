@@ -105,7 +105,8 @@ class HtmlExcelConnector(Connector):
         When ``historical_navigation`` is configured, the portal is followed by
         the visible labels rather than by crawling every descendant.  This is
         important here because each annual page contains several reports with
-        similarly named Excel files.
+        similarly named Excel files. A navigation step may provide multiple
+        accepted labels when the portal uses alternate titles across years.
         """
         if not dataset.endpoint:
             raise ValueError(f"Dataset {dataset.code} requires an endpoint")
@@ -211,17 +212,22 @@ class HtmlExcelConnector(Connector):
             )
 
     @staticmethod
-    def _get_named_page(page, expected_label, context):
+    def _get_named_page(page, expected_label: str | list[str], context):
         soup = BeautifulSoup(page.body, "html.parser")
-        expected = normalise_text(expected_label)
+        expected_labels = (
+            [expected_label] if isinstance(expected_label, str) else expected_label
+        )
+        expected = {normalise_text(label) for label in expected_labels}
         for anchor in soup.find_all("a", href=True):
             text = normalise_text(" ".join(anchor.stripped_strings))
-            if text == expected:
+            if text in expected:
                 url = urljoin(page.source_url, str(anchor["href"]))
                 if HtmlExcelConnector._is_auxiliary_navigation_url(urlparse(url)):
                     continue
                 return context.http.get(url)
-        raise LookupError(f"Could not find navigation link {expected_label!r} at {page.source_url}")
+        raise LookupError(
+            f"Could not find navigation link matching {expected_labels!r} at {page.source_url}"
+        )
 
     @staticmethod
     def _is_auxiliary_navigation_url(parsed_url):

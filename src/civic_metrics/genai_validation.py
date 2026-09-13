@@ -212,7 +212,7 @@ def _validation_workbook_sheets(dataset_id: int | None) -> list[str] | None:
     if dataset_id == 10:
         return ["Ingresos tributarios"]
     if dataset_id == 13:
-        return ["Tabla_1_5"]
+        return ["Tabla_1_5", "DATOS PEST4"]
     return None
 
 
@@ -250,8 +250,12 @@ def _render_aeat_tax_revenue_workbook(body: bytes) -> str:
 
 def _render_social_security_affiliates_workbook(body: bytes) -> str:
     """Render the same monthly aggregation used by the affiliates connector."""
-    sheet_name = "Tabla_1_5"
-    frame = pd.read_excel(io.BytesIO(body), sheet_name=sheet_name)
+    allowed_sheets = ["Tabla_1_5", "DATOS PEST4"]
+    workbooks = pd.read_excel(io.BytesIO(body), sheet_name=None)
+    sheet_name = next((name for name in allowed_sheets if name in workbooks), None)
+    if sheet_name is None:
+        raise ValueError(f"Workbook does not contain any expected sheet {allowed_sheets!r}")
+    frame = workbooks[sheet_name]
     required = {"PERIODO", "SALDOS"}
     missing = required - set(frame.columns)
     if missing:

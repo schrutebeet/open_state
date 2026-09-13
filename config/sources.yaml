@@ -158,6 +158,8 @@ datasets:
     - .xls
     - .xlsx
     data_sheet: Tabla_1_5
+    data_sheet_fallbacks:
+    - DATOS PEST4
 - code: social_security_pension_series
   source: social_security
   connector: social_security_pensions
@@ -167,13 +169,19 @@ datasets:
     historical_year_tree: true
     historical_navigation:
     - Pensiones contributivas en vigor
-    - Pensiones por CCAA y provincias
+    - - Pensiones por CCAA y provincias
+      - Pensiones por CCAA y provincias. Total Sistema
     link_include:
     - Pensiones por CCAA y provincias
     extensions:
     - .xlsx
     - .xls
     data_sheet: CA_Total sistema
+    data_sheet_fallbacks:
+    - CA2
+    - TOTALSISTEMA.
+    - TOTALSISTEMA
+    - Total Sistema
 - code: social_security_pension_payroll
   source: social_security
   connector: social_security_pensions
