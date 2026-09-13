@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 from time import perf_counter
 
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
@@ -408,12 +409,10 @@ class PipelineOrchestrator:
             elif missing_codes:
                 status = "partial"
                 error = f"Missing indicators: {', '.join(missing_codes)}"
-            elif availability_warnings:
-                # The source returned valid observations, just not the full
-                # requested history. Preserve the data and mark it explicitly.
-                status = "partial"
-                error = None
             else:
+                # A short official history is an availability warning. The
+                # observations that were returned are still valid and must not
+                # block a strict production run from publishing history.db.
                 status = "success"
                 error = None
             for warning in availability_warnings:
@@ -476,6 +475,38 @@ class PipelineOrchestrator:
                 required=definition.required,
                 expected_indicators=len(indicators),
                 error=str(exc),
+                requested_by_indicator={
+                    item.code: self.settings.lookback_period for item in indicators
+                },
+                source_urls=[definition.endpoint] if definition.endpoint else [],
+            )
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            allow_stale = bool(definition.config.get("allow_stale_on_transient_error"))
+            if allow_stale and status_code in HttpClient.RETRYABLE_STATUS_CODES:
+                warning = (
+                    f"Official source returned temporary HTTP {status_code}; no fresh "
+                    "observations were extracted. The restored history is retained."
+                )
+                LOGGER.warning("Dataset %s is stale: %s", definition.code, warning)
+                return DatasetResult(
+                    dataset=definition.code,
+                    status="stale",
+                    required=definition.required,
+                    expected_indicators=len(indicators),
+                    requested_by_indicator={
+                        item.code: self.settings.lookback_period for item in indicators
+                    },
+                    warnings=[warning],
+                    source_urls=[definition.endpoint] if definition.endpoint else [],
+                )
+            LOGGER.exception("Dataset %s failed", definition.code)
+            return DatasetResult(
+                dataset=definition.code,
+                status="failed",
+                required=definition.required,
+                expected_indicators=len(indicators),
+                error=f"{type(exc).__name__}: {exc}",
                 requested_by_indicator={
                     item.code: self.settings.lookback_period for item in indicators
                 },
