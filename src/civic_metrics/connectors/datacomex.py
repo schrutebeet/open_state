@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-import hashlib
 import random
+import re
 import time
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import urlencode
 
@@ -17,6 +18,28 @@ from civic_metrics.parsers.common import normalise_text, parse_decimal, period_f
 from civic_metrics.security import get_datacomex_credentials
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _parse_datacomex_euros(value: Any) -> Decimal:
+    """Parse DataComex's ``euros`` field without guessing its locale.
+
+    The API represents decimal values with a comma, including values with
+    exactly three decimal places (for example ``31139899583,891``).  The
+    generic parser correctly rejects that shape as ambiguous because other
+    sources may use it as a thousands separator.  In this API field the
+    convention is documented by the response format, so interpret a lone
+    comma as the decimal mark here only.
+    """
+    if isinstance(value, str):
+        compact = value.strip().replace("\u00a0", "").replace(" ", "")
+        if re.fullmatch(r"[+-]?\d+,\d+", compact):
+            try:
+                parsed = Decimal(compact.replace(",", "."))
+            except InvalidOperation as exc:
+                raise ValueError(f"Invalid DataComex euros value {value!r}") from exc
+            if parsed.is_finite():
+                return parsed
+    return parse_decimal(value)
 
 
 class MissingCredentialsError(RuntimeError):
@@ -154,7 +177,11 @@ class DataComexConnector(Connector):
         indicators: list[IndicatorDefinition],
     ) -> list[ObservationCandidate]:
         document = json.loads(payload.body.decode("utf-8-sig"))
-        rows = document if isinstance(document, list) else document.get("data", document.get("Resultados", []))
+        rows = (
+            document
+            if isinstance(document, list)
+            else document.get("data", document.get("Resultados", []))
+        )
         if not isinstance(rows, list):
             raise ValueError("Unexpected DataComex response structure")
 
@@ -183,7 +210,7 @@ class DataComexConnector(Connector):
                         source_code=dataset.source,
                         dataset_code=dataset.code,
                         period=period,
-                        value=parse_decimal(row["euros"]) * multiplier,
+                        value=_parse_datacomex_euros(row["euros"]) * multiplier,
                         unit=indicator.unit,
                         is_provisional="provisional" in normalise_text(row.get("mensaje", "")),
                         source_series=f"{row.get('flujo')}:{row.get('id_pais')}:{row.get('taric')}:{row.get('id_prov')}",
