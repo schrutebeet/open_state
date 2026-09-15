@@ -1,11 +1,9 @@
 name: Pulso País data update workflow
 
 on:
-  # Runs on the 15th of every month at 04:17 in mainland Spain.
-  # Europe/Madrid automatically follows CET/CEST daylight-saving changes.
+  # Runs every day at the start of each hour.
   schedule:
-    - cron: "17 4 15 * *"
-      timezone: "Europe/Madrid"
+    - cron: "0 * * * *"
 
   # Also lets you launch and test the workflow manually from GitHub.
   workflow_dispatch:
@@ -185,6 +183,45 @@ jobs:
             fi
           fi
 
+      - name: Record publication baseline
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sqlite3
+          from pathlib import Path
+
+          def sha256(path):
+              if not path.is_file():
+                  return None
+              digest = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          files = {
+              "History database": Path(os.environ["HISTORY_DB_PATH"]),
+              "Snapshot database": Path(os.environ["SNAPSHOT_DB_PATH"]),
+              "Budget execution JSON": Path(os.environ["BUDGET_HISTORY_PATH"]),
+              "Dashboard JSON": Path(os.environ["DASHBOARD_PATH"]),
+          }
+          history_observations = None
+          if files["History database"].is_file():
+              with sqlite3.connect(files["History database"]) as connection:
+                  history_observations = connection.execute(
+                      "SELECT COUNT(*) FROM observations"
+                  ).fetchone()[0]
+          baseline = {
+              "files": {label: sha256(path) for label, path in files.items()},
+              "history_observations": history_observations,
+          }
+          output = Path(os.environ["RUNTIME_DIR"]) / "publication_baseline.json"
+          output.write_text(json.dumps(baseline, indent=2), encoding="utf-8")
+          print(f"Recorded publication baseline for {sum(value is not None for value in baseline.values())} existing files")
+          PY
+
       - name: Run backend
         # Strict mode returns a non-zero exit code if any required dataset
         # fails, is incomplete or is skipped, preventing publication to R2.
@@ -280,9 +317,11 @@ jobs:
       - name: Upload dated snapshot backup to private R2
         run: |
           BACKUP_DATE="$(date +%Y-%m-%dT%H-%M-%S%z)"
+          SNAPSHOT_R2_KEY="backups/${BACKUP_DATE}/snapshot.db"
+          echo "SNAPSHOT_R2_KEY=$SNAPSHOT_R2_KEY" >> "$GITHUB_ENV"
           aws s3 cp \
             "$SNAPSHOT_DB_PATH" \
-            "s3://${R2_PRIVATE_BUCKET}/backups/${BACKUP_DATE}/snapshot.db" \
+            "s3://${R2_PRIVATE_BUCKET}/${SNAPSHOT_R2_KEY}" \
             --endpoint-url "$R2_ENDPOINT_URL"
 
       - name: Publish current history database to private R2
@@ -347,6 +386,22 @@ jobs:
             --endpoint-url "$R2_ENDPOINT_URL" \
             --content-type "application/json; charset=utf-8" \
             --cache-control "public, max-age=300, stale-while-revalidate=86400"
+
+      - name: Send publication report by email
+        if: always()
+        continue-on-error: true
+        env:
+          RUN_CONCLUSION: ${{ job.status }}
+          EMAIL_ONLY_ON_CHANGES: "true"
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || 465 }}
+          SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS || 'false' }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+          SMTP_SUBJECT_PREFIX: Paisómetro
+        run: python scripts/send_run_report_email.py
 
       - name: Remove local data files from runner
         if: always() && env.SAVE_FILES_LOCALLY == 'false'
