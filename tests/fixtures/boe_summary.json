@@ -1,0 +1,28 @@
+{
+  "status": {"code": "200", "text": "ok"},
+  "data": {
+    "sumario": {
+      "metadatos": {"publicacion": "BOE", "fecha_publicacion": "20260915"},
+      "diario": [{
+        "numero": "220",
+        "seccion": [{
+          "codigo": "1",
+          "nombre": "I. Disposiciones generales",
+          "departamento": [{
+            "codigo": "7723",
+            "nombre": "Jefatura del Estado",
+            "epigrafe": [{
+              "nombre": "Leyes",
+              "item": {
+                "identificador": "BOE-A-2026-9999",
+                "titulo": "Ley 1/2026, de 15 de septiembre, de prueba pública.",
+                "url_html": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-9999",
+                "url_xml": "https://www.boe.es/diario_boe/xml.php?id=BOE-A-2026-9999"
+              }
+            }]
+          }]
+        }]
+      }]
+    }
+  }
+}

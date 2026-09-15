@@ -1,0 +1,15 @@
+{
+  "status": {"code": "200", "text": "ok"},
+  "data": [{
+    "identificador": "BOE-A-2026-9999",
+    "ambito": {"codigo": "1", "texto": "Estatal"},
+    "rango": {"codigo": "1300", "texto": "Ley"},
+    "fecha_disposicion": "20260915",
+    "numero_oficial": "1/2026",
+    "titulo": "Ley 1/2026, de 15 de septiembre, de prueba pública.",
+    "diario": "Boletín Oficial del Estado",
+    "fecha_publicacion": "20260915",
+    "fecha_vigencia": "20260915",
+    "url_eli": "https://www.boe.es/eli/es/l/2026/09/15/1"
+  }]
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "LEGISLATURA": "Leg.15",
+    "TIPO": "Proposición de ley",
+    "OBJETO": "Proposición de Ley de prueba sobre participación ciudadana.",
+    "NUMEXPEDIENTE": "122/000002/0000",
+    "FECHAPRESENTACION": "15/09/2026",
+    "FECHACALIFICACION": "16/09/2026",
+    "AUTOR": "Grupo Parlamentario de prueba"
+  },
+  {
+    "LEGISLATURA": "Leg.15",
+    "TIPO": "Proposición de ley orgánica",
+    "OBJETO": "Proposición de Ley Orgánica de prueba y exclusión.",
+    "NUMEXPEDIENTE": "122/000003/0000",
+    "FECHAPRESENTACION": "15/09/2026"
+  }
+]

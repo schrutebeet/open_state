@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<iniciativas>
+  <iniciativa>
+    <expediente>622/000004</expediente>
+    <tipo>Proposición de Ley</tipo>
+    <titulo>Proposición de Ley de prueba iniciada en el Senado.</titulo>
+    <fecha_presentacion>15/09/2026</fecha_presentacion>
+  </iniciativa>
+  <iniciativa>
+    <expediente>621/000005</expediente>
+    <tipo>Proyecto de Ley</tipo>
+    <titulo>Proyecto de Ley Orgánica de prueba excluida.</titulo>
+    <fecha_presentacion>15/09/2026</fecha_presentacion>
+  </iniciativa>
+</iniciativas>
