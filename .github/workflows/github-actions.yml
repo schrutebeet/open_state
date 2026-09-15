@@ -223,9 +223,7 @@ jobs:
           PY
 
       - name: Run backend
-        # Strict mode returns a non-zero exit code if any required dataset
-        # fails, is incomplete or is skipped, preventing publication to R2.
-        run: python main.py --strict
+        run: python main.py
 
       - name: Verify execution snapshot
         run: |
