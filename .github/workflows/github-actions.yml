@@ -29,13 +29,6 @@ jobs:
       TZ: Europe/Madrid
       LOOKBACK_PERIOD: ${{ vars.LOOKBACK_PERIOD || 12 }}
       SAVE_FILES_LOCALLY: "false"
-      RUNTIME_DIR: ${{ runner.temp }}/civic-metrics-runtime
-      ARTIFACTS_DIR: ${{ runner.temp }}/civic-metrics-artifacts
-      HISTORY_DB_PATH: ${{ runner.temp }}/civic-metrics-history.db
-      SNAPSHOT_DB_PATH: ${{ runner.temp }}/civic-metrics-snapshot.db
-      BUDGET_HISTORY_PATH: ${{ runner.temp }}/civic-metrics-budget_execution_history.json
-      DATABASE_URL: sqlite+pysqlite:///${{ runner.temp }}/civic-metrics-history.db
-      DASHBOARD_PATH: ${{ runner.temp }}/paisometro-dashboard.json
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: auto
@@ -60,6 +53,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install .
+
+      - name: Configure runner-local paths
+        run: |
+          echo "RUNTIME_DIR=$RUNNER_TEMP/civic-metrics-runtime" >> "$GITHUB_ENV"
+          echo "ARTIFACTS_DIR=$RUNNER_TEMP/civic-metrics-artifacts" >> "$GITHUB_ENV"
+          echo "HISTORY_DB_PATH=$RUNNER_TEMP/civic-metrics-history.db" >> "$GITHUB_ENV"
+          echo "SNAPSHOT_DB_PATH=$RUNNER_TEMP/civic-metrics-snapshot.db" >> "$GITHUB_ENV"
+          echo "BUDGET_HISTORY_PATH=$RUNNER_TEMP/civic-metrics-budget_execution_history.json" >> "$GITHUB_ENV"
+          echo "DATABASE_URL=sqlite+pysqlite:///$RUNNER_TEMP/civic-metrics-history.db" >> "$GITHUB_ENV"
+          echo "DASHBOARD_PATH=$RUNNER_TEMP/paisometro-dashboard.json" >> "$GITHUB_ENV"
 
       - name: Check deployment configuration
         run: |
