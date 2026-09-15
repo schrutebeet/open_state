@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     project_root: Path = Field(default_factory=lambda: Path.cwd())
     database_url: str = "sqlite+pysqlite:///./data/history.db"
     snapshot_db_path: Path = Path("data/snapshot.db")
+    budget_history_path: Path = Path("data/budget_execution_history.json")
+    budget_audit_summary_path: Path = Path("data/budget_execution_history_audit.summary.json")
+    data_dir: Path = Path("data")
+    runtime_dir: Path = Path(".runtime")
+    save_files_locally: bool = True
     config_dir: Path = Path("config")
     artifacts_dir: Path = Path("artifacts")
     log_level: str = "INFO"
@@ -77,10 +82,22 @@ class Settings(BaseSettings):
         return self._resolve(self.config_dir)
 
     def resolved_artifacts_dir(self) -> Path:
-        return self._resolve(self.artifacts_dir)
+        if self.save_files_locally:
+            return self._resolve(self.artifacts_dir)
+        return self._resolve(self.runtime_dir / "artifacts").resolve()
 
     def resolved_snapshot_db_path(self) -> Path:
-        return self._resolve(self.snapshot_db_path).resolve()
+        return self._resolve_runtime_path(self.snapshot_db_path)
+
+    def resolved_data_dir(self) -> Path:
+        """Return the directory for generated databases, JSON, logs, and reports."""
+        return self._resolve(self.data_dir if self.save_files_locally else self.runtime_dir).resolve()
+
+    def resolved_budget_history_path(self) -> Path:
+        return self._resolve_runtime_path(self.budget_history_path)
+
+    def resolved_budget_audit_summary_path(self) -> Path:
+        return self._resolve_runtime_path(self.budget_audit_summary_path)
 
     def resolved_database_url(self) -> str:
         if self.database_url.endswith(":memory:") or not self.database_url.startswith("sqlite"):
@@ -92,8 +109,19 @@ class Settings(BaseSettings):
         path = Path(raw_path)
         if path.is_absolute():
             return self.database_url
-        absolute = (self.project_root / path).resolve()
+        absolute = self._resolve_runtime_path(path)
         return f"{prefix}{marker}{absolute}"
 
     def _resolve(self, path: Path) -> Path:
         return path if path.is_absolute() else self.project_root / path
+
+    def _resolve_runtime_path(self, path: Path) -> Path:
+        absolute = self._resolve(path).resolve()
+        if self.save_files_locally:
+            return absolute
+        data_root = (self.project_root / "data").resolve()
+        try:
+            relative = absolute.relative_to(data_root)
+        except ValueError:
+            return absolute
+        return (self._resolve(self.runtime_dir) / relative).resolve()

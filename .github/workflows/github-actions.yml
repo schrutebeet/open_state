@@ -28,9 +28,14 @@ jobs:
       PYTHONUNBUFFERED: "1"
       TZ: Europe/Madrid
       LOOKBACK_PERIOD: ${{ vars.LOOKBACK_PERIOD || 12 }}
-      HISTORY_DB_PATH: data/history.db
-      SNAPSHOT_DB_PATH: data/snapshot.db
-      DATABASE_URL: sqlite+pysqlite:///${{ github.workspace }}/data/history.db
+      SAVE_FILES_LOCALLY: "false"
+      RUNTIME_DIR: ${{ runner.temp }}/civic-metrics-runtime
+      ARTIFACTS_DIR: ${{ runner.temp }}/civic-metrics-artifacts
+      HISTORY_DB_PATH: ${{ runner.temp }}/civic-metrics-history.db
+      SNAPSHOT_DB_PATH: ${{ runner.temp }}/civic-metrics-snapshot.db
+      BUDGET_HISTORY_PATH: ${{ runner.temp }}/civic-metrics-budget_execution_history.json
+      DATABASE_URL: sqlite+pysqlite:///${{ runner.temp }}/civic-metrics-history.db
+      DASHBOARD_PATH: ${{ runner.temp }}/paisometro-dashboard.json
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: auto
@@ -69,7 +74,7 @@ jobs:
           aws --version
 
       - name: Prepare data directories
-        run: mkdir -p data artifacts
+        run: mkdir -p "$RUNTIME_DIR" "$ARTIFACTS_DIR"
 
       - name: Restore latest database from R2
         run: |
@@ -134,6 +139,49 @@ jobs:
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
               handle.write(f"RESTORED_OBSERVATIONS={observations}\n")
 
+      - name: Restore IGAE budget history JSON from R2
+        run: |
+          RESTORED_BUDGET_PATH="${BUDGET_HISTORY_PATH}.restored"
+          RESTORE_ERROR="$(mktemp)"
+          rm -f "$RESTORED_BUDGET_PATH"
+          if aws s3 cp \
+            "s3://${R2_PUBLIC_BUCKET}/v1/budget_execution_history.json" \
+            "$RESTORED_BUDGET_PATH" \
+            --endpoint-url "$R2_ENDPOINT_URL" 2>"$RESTORE_ERROR"; then
+            python - "$RESTORED_BUDGET_PATH" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          periods = payload.get("periods", {})
+          categories = sum(len(item.get("categories", [])) for item in periods.values())
+          if not periods or not categories:
+              raise SystemExit("Restored budget JSON contains no periods or categories")
+          print(f"Validated restored budget history: {len(periods)} periods, {categories} categories")
+          PY
+            mv -f "$RESTORED_BUDGET_PATH" "$BUDGET_HISTORY_PATH"
+            rm -f "$RESTORE_ERROR"
+            echo "Restored and validated budget_execution_history.json from public R2."
+          else
+            if grep -Eqi 'NoSuchKey|Not Found|404|does not exist' "$RESTORE_ERROR"; then
+              echo "No budget history JSON exists in R2; copying the repository seed file to runner temp."
+              test -s "data/budget_execution_history.json" || {
+                echo "::error::No R2 budget JSON and no repository seed file found" >&2
+                rm -f "$RESTORED_BUDGET_PATH" "$RESTORE_ERROR"
+                exit 1
+              }
+              cp "data/budget_execution_history.json" "$BUDGET_HISTORY_PATH"
+              rm -f "$RESTORED_BUDGET_PATH" "$RESTORE_ERROR"
+            else
+              echo "::error::Could not restore budget_execution_history.json from R2; refusing to replace it."
+              cat "$RESTORE_ERROR" >&2
+              rm -f "$RESTORED_BUDGET_PATH" "$RESTORE_ERROR"
+              exit 1
+            fi
+          fi
+
       - name: Run backend
         # Strict mode returns a non-zero exit code if any required dataset
         # fails, is incomplete or is skipped, preventing publication to R2.
@@ -166,6 +214,22 @@ jobs:
               f"Snapshot exceeds LOOKBACK_PERIOD: {maximum} > {os.environ['LOOKBACK_PERIOD']}"
             )
           print(f"Snapshot respects LOOKBACK_PERIOD={os.environ['LOOKBACK_PERIOD']}")
+
+      - name: Verify IGAE budget history JSON
+        run: |
+          test -s "$BUDGET_HISTORY_PATH"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["BUDGET_HISTORY_PATH"])
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          periods = payload.get("periods", {})
+          categories = sum(len(item.get("categories", [])) for item in periods.values())
+          if not periods or not categories:
+              raise SystemExit("IGAE budget history JSON contains no periods or categories")
+          print(f"Validated IGAE budget history JSON: {len(periods)} periods, {categories} categories")
           PY
 
       - name: Verify and checkpoint private SQLite databases
@@ -225,19 +289,28 @@ jobs:
             "s3://${R2_PRIVATE_BUCKET}/history.db" \
             --endpoint-url "$R2_ENDPOINT_URL"
 
+      - name: Publish IGAE budget history JSON to public R2 bucket
+        run: |
+          aws s3 cp \
+            "$BUDGET_HISTORY_PATH" \
+            "s3://${R2_PUBLIC_BUCKET}/v1/budget_execution_history.json" \
+            --endpoint-url "$R2_ENDPOINT_URL" \
+            --content-type "application/json; charset=utf-8" \
+            --cache-control "public, max-age=3600, stale-while-revalidate=86400"
+
       - name: Export frontend-safe JSON from the current snapshot
         run: |
-          rm -f public/paisometro-dashboard.json
           python scripts/export_dashboard.py \
             --database "$SNAPSHOT_DB_PATH" \
-            --output public/paisometro-dashboard.json
-          test -s public/paisometro-dashboard.json
+            --output "$DASHBOARD_PATH"
+          test -s "$DASHBOARD_PATH"
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           dashboard = json.loads(
-              Path("public/paisometro-dashboard.json").read_text(encoding="utf-8")
+              Path(os.environ["DASHBOARD_PATH"]).read_text(encoding="utf-8")
           )
           if not dashboard.get("indicators"):
               raise SystemExit("Generated dashboard JSON contains no indicators")
@@ -266,23 +339,16 @@ jobs:
       - name: Publish dashboard JSON to public R2 bucket
         run: |
           aws s3 cp \
-            public/paisometro-dashboard.json \
+            "$DASHBOARD_PATH" \
             "s3://${R2_PUBLIC_BUCKET}/v1/paisometro-dashboard.json" \
             --endpoint-url "$R2_ENDPOINT_URL" \
             --content-type "application/json; charset=utf-8" \
             --cache-control "public, max-age=300, stale-while-revalidate=86400"
 
-      # This copy is useful for debugging and can be downloaded from the
-      # individual workflow run. It is not the persistent production copy.
-      - name: Attach database to workflow run
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: civic-metrics-${{ github.run_id }}
-          path: |
-            data/history.db
-            data/history.db-wal
-            data/history.db-shm
-            data/snapshot.db
-          if-no-files-found: warn
-          retention-days: 30
+      - name: Remove local data files from runner
+        if: always() && env.SAVE_FILES_LOCALLY == 'false'
+        run: |
+          if [ -d data ]; then
+            find data -mindepth 1 -maxdepth 1 -type f -print -delete
+          fi
+

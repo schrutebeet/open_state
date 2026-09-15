@@ -892,6 +892,34 @@ indicators:
     - Gastos financieros
     column_include:
     - obligaciones reconocidas netas
+- code: state_budget_policy_execution
+  name: State budget execution by spending area and policy
+  name_es: "Ejecución del presupuesto estatal por áreas y políticas"
+  description: Monthly IGAE spending-area and policy breakdown, with budget credits, recognised obligations, and payments.
+  description_es: "Desglose mensual del presupuesto del Estado por áreas y políticas, con créditos, obligaciones reconocidas y pagos. Cada observación corresponde a una partida; el detalle completo se publica como composición presupuestaria."
+  onboarding:
+    profiles:
+      - "Empresa / consultoría"
+      - "Análisis de datos"
+      - "Sector público"
+      - "Periodismo"
+      - "Investigación"
+      - "Interés personal"
+    relevant_areas:
+      - "Finanzas públicas"
+      - "Presupuestos"
+    objectives:
+      - "Investigar en profundidad"
+      - "Seguir los cambios"
+      - "Entender el panorama"
+      - "Tomar decisiones"
+  category: public_finances
+  subcategory: budget_execution
+  dataset: igae_state_budget_policy_execution
+  unit: million_eur
+  frequency: monthly
+  extraction:
+    kind: excel_label
 - code: state_revenue_execution_pct
   name: State revenue execution
   name_es: "Ejecución de los ingresos del Estado"
