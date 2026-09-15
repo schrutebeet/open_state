@@ -3,7 +3,7 @@ name: Pulso País data update workflow
 on:
   # Runs every day at the start of each hour.
   schedule:
-    - cron: "0 * * * *"
+    - cron: "42 */5 * * *" # 
 
   # Also lets you launch and test the workflow manually from GitHub.
   workflow_dispatch:
