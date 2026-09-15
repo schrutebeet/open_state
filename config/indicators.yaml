@@ -915,7 +915,7 @@ indicators:
       - "Tomar decisiones"
   category: public_finances
   subcategory: budget_execution
-  dataset: igae_state_budget_policy_execution
+  dataset: igae_state_budget_execution
   unit: million_eur
   frequency: monthly
   extraction:
