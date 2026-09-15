@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import calendar
 import re
+from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
-from typing import Iterable
+from zipfile import BadZipFile
 
 import openpyxl
+import xlrd
+from openpyxl import Workbook
+from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.worksheet.worksheet import Worksheet
 
 from civic_metrics.catalog import DatasetDefinition, IndicatorDefinition
@@ -134,13 +138,41 @@ class IgaeStateBudgetExecutionConnector(HtmlExcelConnector):
     connector_name = "igae_state_budget_execution"
     _TO_MILLION = Decimal("0.001")
 
+    @staticmethod
+    def _load_workbook(body: bytes) -> Workbook:
+        """Load both modern ``.xlsx`` and legacy binary ``.xls`` workbooks.
+
+        The IGAE archive contains older ``.xls`` files.  ``openpyxl`` reports
+        those as ``BadZipFile`` because an old workbook is not a ZIP package;
+        ``xlrd`` reads the binary format, and the values are copied into an
+        in-memory openpyxl workbook so the existing cell-based parser can be
+        reused unchanged.
+        """
+        try:
+            return openpyxl.load_workbook(BytesIO(body), data_only=True)
+        except (BadZipFile, InvalidFileException, OSError, ValueError):
+            legacy = xlrd.open_workbook(file_contents=body)
+            workbook = Workbook()
+            default_sheet = workbook.active
+            workbook.remove(default_sheet)
+            for legacy_sheet in legacy.sheets():
+                sheet = workbook.create_sheet(title=legacy_sheet.name[:31])
+                for row_index in range(legacy_sheet.nrows):
+                    sheet.append(legacy_sheet.row_values(row_index))
+            if not workbook.sheetnames:
+                workbook.close()
+                raise LookupError(
+                    "Legacy IGAE workbook does not contain any worksheets"
+                ) from None
+            return workbook
+
     def extract(
         self,
         dataset: DatasetDefinition,
         payload: DatasetPayload,
         indicators: list[IndicatorDefinition],
     ) -> list[ObservationCandidate]:
-        workbook = openpyxl.load_workbook(BytesIO(payload.body), data_only=True)
+        workbook = self._load_workbook(payload.body)
         try:
             return self._extract_workbook(dataset, payload, indicators, workbook)
         finally:

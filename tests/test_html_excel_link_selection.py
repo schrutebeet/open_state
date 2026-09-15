@@ -115,6 +115,96 @@ def test_generated_historical_links_remove_current_file_cache() -> None:
     ]
 
 
+def test_latest_only_link_prefers_the_most_recent_advertised_month() -> None:
+    links = [
+        (
+            "https://example.test/EXTRACTO%20JULIO%202026%20(EXCEL).xlsx",
+            "Cuadros julio 2026",
+            (0, 0, 0),
+        ),
+        (
+            "https://example.test/EXTRACTO%20OCTUBRE%202016%20(EXCEL).xls",
+            "Cuadros octubre 2016",
+            (0, 0, 0),
+        ),
+    ]
+
+    selected = max(links, key=HtmlExcelConnector._historical_link_period_key)
+
+    assert selected[1] == "Cuadros julio 2026"
+
+
+def test_latest_only_does_not_follow_archive_pages() -> None:
+    requested_paths: list[str] = []
+
+    class LatestOnlyConnector(HtmlExcelConnector):
+        def extract(self, dataset, payload, indicators):
+            return [
+                ObservationCandidate(
+                    indicator_code="demo_indicator",
+                    source_code=dataset.source,
+                    dataset_code=dataset.code,
+                    period=Period(
+                        date(2026, 7, 1), date(2026, 7, 31), "2026-07", "monthly"
+                    ),
+                    value=Decimal("1"),
+                    unit="people",
+                )
+            ]
+
+    dataset = DatasetDefinition(
+        code="latest_only_history",
+        source="demo_source",
+        connector="html_excel",
+        endpoint="https://example.test/listing",
+        config={
+            "historical_files": True,
+            "latest_only": True,
+            "archive_link_pattern": r"archive20\d{2}\.aspx$",
+            "link_include": ["Cuadros"],
+            "extensions": [".xlsx"],
+        },
+    )
+    indicator = IndicatorDefinition(
+        code="demo_indicator",
+        name="Demo",
+        description="Demo indicator",
+        category="demo",
+        dataset=dataset.code,
+        unit="people",
+        frequency="monthly",
+        extraction=ExtractionDefinition(kind="excel_label"),
+    )
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requested_paths.append(request.url.path)
+        if request.url.path == "/listing":
+            return httpx.Response(
+                200,
+                content=(
+                    b'<a href="/latest.xlsx">Cuadros julio 2026</a>'
+                    b'<a href="/archive2025.aspx">Archivo 2025</a>'
+                ),
+                request=request,
+            )
+        return httpx.Response(200, content=b"not used by this test", request=request)
+
+    http = HttpClient(1)
+    http._client.close()
+    http._client = httpx.Client(transport=httpx.MockTransport(respond))
+    try:
+        documents = LatestOnlyConnector().collect(
+            dataset,
+            ConnectorContext(Settings(lookback_period=13), http, "monthly"),
+            [indicator],
+        )
+    finally:
+        http.close()
+
+    assert len(documents) == 1
+    assert requested_paths == ["/listing", "/latest.xlsx"]
+
+
 def test_incomplete_history_is_a_warning_not_a_lookup_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

@@ -58,6 +58,13 @@ class HtmlExcelConnector(Connector):
                 links.append((url, label, self._publication_score(combined)))
             if dataset.config.get("generate_historical_files"):
                 links = self._generated_historical_links(links, target)
+            if dataset.config.get("latest_only"):
+                if not links:
+                    raise LookupError(
+                        f"No current downloadable file found for latest-only dataset "
+                        f"{dataset.code}"
+                    )
+                links = [max(links, key=self._historical_link_period_key)]
             for url, label, _ in sorted(links, key=lambda item: item[2], reverse=True):
                 if url in seen_urls:
                     continue
@@ -87,17 +94,29 @@ class HtmlExcelConnector(Connector):
                 documents.append((payload, unique))
                 if all(len(bucket) >= target for bucket in periods.values()):
                     return documents
+            if dataset.config.get("latest_only"):
+                break
             listing_urls.extend(sorted(set(archives) - visited, reverse=True))
         missing = {
             code: target - len(bucket)
             for code, bucket in periods.items()
             if len(bucket) < target
         }
-        if missing:
+        if missing and not dataset.config.get("latest_only"):
             self._warn_incomplete_history(dataset.code, target, periods)
         if not documents:
             raise LookupError(f"No historical files found for {dataset.code}")
         return documents
+
+    @staticmethod
+    def _historical_link_period_key(link: tuple[str, str, tuple[int, int, int]]) -> tuple[int, int]:
+        """Return the advertised year/month used to select a latest-only file."""
+        url, label, _ = link
+        try:
+            period = period_from_label(unquote_plus(f"{label} {url}"), "monthly")
+        except ValueError:
+            return (0, 0)
+        return period.end.year, period.end.month
 
     def _collect_historical_year_tree(self, dataset, context, indicators):
         """Collect real monthly files from an annual portal tree.

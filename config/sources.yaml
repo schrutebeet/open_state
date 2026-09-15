@@ -140,6 +140,7 @@ datasets:
   endpoint: https://www.igae.pap.hacienda.gob.es/sitios/igae/es-ES/Contabilidad/ContabilidadPublica/CPE/EjecucionPresupuestaria/Paginas/imextractoejecucion.aspx
   config:
     historical_files: true
+    latest_only: true
     archive_link_pattern: 'imextractoejecucion20\d{2}\.aspx$'
     link_include:
     - Cuadros
