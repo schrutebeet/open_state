@@ -11,11 +11,13 @@ from pathlib import Path
 
 from filelock import FileLock, Timeout
 from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session, sessionmaker
 
-from civic_metrics.catalog import load_catalog
+from civic_metrics.budget_execution import update_budget_execution
+from civic_metrics.catalog import Catalog, load_catalog
 from civic_metrics.db import create_database_engine, init_database, make_session_factory
 from civic_metrics.logging_config import configure_logging
-from civic_metrics.orchestrator import PipelineOrchestrator
+from civic_metrics.orchestrator import PipelineOrchestrator, PipelineResult
 from civic_metrics.processors.country_grade import materialise_country_grade
 from civic_metrics.settings import Settings
 from civic_metrics.snapshot import create_snapshot, validate_snapshot_paths
@@ -52,6 +54,64 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _append_collected_data_to_history(
+    settings: Settings,
+    catalog: Catalog,
+    factory: sessionmaker[Session],
+    selected_datasets: list[str],
+) -> PipelineResult:
+    """Run collection and append the resulting observations to ``history.db``."""
+    return PipelineOrchestrator(settings, catalog, factory).run(selected_datasets)
+
+
+def _generate_country_grade_for_run(
+    factory: sessionmaker[Session],
+) -> dict[str, object]:
+    """Generate and persist the country grade after collection has completed."""
+    with factory.begin() as session:
+        return materialise_country_grade(session)
+
+
+def _update_budget_execution_for_run(
+    settings: Settings,
+    history_path: Path | None,
+) -> dict[str, object] | None:
+    """Refresh the budget history JSON and its normalized tables in ``history.db``."""
+    if history_path is None:
+        LOGGER.warning(
+            "Automatic IGAE budget-history update requires a file-backed SQLite database"
+        )
+        return None
+    return update_budget_execution(
+        settings.project_root,
+        history_path,
+        data_path=settings.resolved_budget_history_path(),
+        audit_path=settings.resolved_budget_audit_summary_path(),
+    )
+
+
+def _finalize_snapshot(
+    history_path: Path | None,
+    snapshot_path: Path,
+    lookback_period: int,
+    result: PipelineResult,
+    catalog: Catalog,
+) -> None:
+    """Create the bounded snapshot and refresh per-indicator snapshot counts."""
+    if history_path is None:
+        LOGGER.warning("Automatic snapshot requires a file-backed SQLite database")
+        return
+
+    create_snapshot(history_path, snapshot_path, lookback_period)
+    snapshot_counts = _snapshot_indicator_counts(snapshot_path)
+    for dataset in result.datasets:
+        dataset.snapshot_by_indicator = {
+            indicator.code: snapshot_counts.get((dataset.dataset, indicator.code), 0)
+            for indicator in catalog.indicators
+            if indicator.dataset == dataset.dataset and indicator.enabled
+        }
+
+
 def run_pipeline(
     argv: list[str] | None = None,
     *,
@@ -76,7 +136,7 @@ def run_pipeline(
     if history_path is not None:
         validate_snapshot_paths(history_path, snapshot_path)
 
-    lock_path = settings.project_root / "data" / "pipeline.lock"
+    lock_path = settings.resolved_data_dir() / "pipeline.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock = FileLock(lock_path, timeout=0)
     try:
@@ -86,24 +146,40 @@ def run_pipeline(
             try:
                 init_database(engine)
                 factory = make_session_factory(engine)
-                result = PipelineOrchestrator(settings, catalog, factory).run(args.dataset)
-                with factory.begin() as session:
-                    result.country_grade = materialise_country_grade(session)
-                if history_path is not None:
-                    create_snapshot(history_path, snapshot_path, settings.lookback_period)
-                    snapshot_counts = _snapshot_indicator_counts(snapshot_path)
-                    for dataset in result.datasets:
-                        dataset.snapshot_by_indicator = {
-                            indicator.code: snapshot_counts.get(
-                                (dataset.dataset, indicator.code), 0
-                            )
-                            for indicator in catalog.indicators
-                            if indicator.dataset == dataset.dataset and indicator.enabled
-                        }
-                else:
-                    LOGGER.warning("Automatic snapshot requires a file-backed SQLite database")
+
+                # Phase 1: collect observations and append them to history.db.
+                result = _append_collected_data_to_history(
+                    settings, catalog, factory, args.dataset
+                )
+
+                # Phase 2: calculate the grade from the now-updated history database.
+                result.country_grade = _generate_country_grade_for_run(factory)
+
+                # Phase 3: refresh the budget execution data in history.db and JSON.
+                budget_update = None
+                try:
+                    budget_update = _update_budget_execution_for_run(settings, history_path)
+                    if budget_update is not None:
+                        LOGGER.info("Updated IGAE budget history: %s", budget_update)
+                except Exception:
+                    LOGGER.exception("Could not update IGAE budget history")
+                    if args.strict:
+                        result.derived_errors.append(
+                            "state_budget update failed; budget JSON and budget tables were "
+                            "not updated"
+                        )
+
+                # Snapshot is finalized after all history writers, so it includes the
+                # grade and the budget tables produced in this run.
+                _finalize_snapshot(
+                    history_path,
+                    snapshot_path,
+                    settings.lookback_period,
+                    result,
+                    catalog,
+                )
                 result.run_report_path = _write_run_report(
-                    settings.project_root,
+                    settings.resolved_data_dir(),
                     settings.lookback_period,
                     result.to_dict(),
                 )
@@ -152,7 +228,7 @@ def generate_contry_grade(
     snapshot_path = settings.resolved_snapshot_db_path()
     if history_path is not None:
         validate_snapshot_paths(history_path, snapshot_path)
-    lock_path = settings.project_root / "data" / "pipeline.lock"
+    lock_path = settings.resolved_data_dir() / "pipeline.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with FileLock(lock_path, timeout=0):
@@ -252,7 +328,7 @@ def _print_summary(summary: dict[str, object]) -> None:
 
 
 def _write_run_report(
-    project_root: Path,
+    output_dir: Path,
     lookback_period: int,
     summary: dict[str, object],
 ) -> str | None:
@@ -260,7 +336,7 @@ def _write_run_report(
     try:
         started_at = datetime.fromisoformat(str(summary["started_at"]))
         timestamp = started_at.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
-        output = project_root / "data" / f"run_report_{summary['run_id']}_{timestamp}.txt"
+        output = output_dir / f"run_report_{summary['run_id']}_{timestamp}.txt"
         datasets = summary.get("datasets", [])
         assert isinstance(datasets, list)
         lines = [
