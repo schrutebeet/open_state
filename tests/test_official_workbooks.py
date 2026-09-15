@@ -127,3 +127,39 @@ def test_sepe_fetch_falls_back_to_official_workbook_when_listing_is_unavailable(
     assert document.source_url == fallback_url
     assert len(observations) == 12
     assert max(observations, key=lambda item: item.period.end).period.label == "2026-07"
+
+
+def test_sepe_fetch_falls_back_when_listing_times_out(monkeypatch) -> None:
+    dataset, indicators = definitions("sepe_registered_unemployment")
+    fallback_url = dataset.config["fallback_url"]
+    workbook = (FIXTURES / "evolparo.xls").read_bytes()
+    calls: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        if str(request.url) == dataset.endpoint:
+            raise httpx.ConnectTimeout("SEPE listing timed out", request=request)
+        if str(request.url) == fallback_url:
+            return httpx.Response(
+                200,
+                headers={"Content-Type": "application/vnd.ms-excel"},
+                content=workbook,
+                request=request,
+            )
+        return httpx.Response(404, request=request)
+
+    http = HttpClient(1)
+    http._client.close()
+    http._client = httpx.Client(transport=httpx.MockTransport(respond))
+    monkeypatch.setattr("civic_metrics.http.time.sleep", lambda _: None)
+    context = ConnectorContext(Settings(lookback_period=12), http)
+    try:
+        connector = SepeRegisteredUnemploymentConnector()
+        document = connector.fetch(dataset, context)
+        observations = connector.extract(dataset, document, indicators)
+    finally:
+        http.close()
+
+    assert calls.count(dataset.endpoint) == 4
+    assert calls[-1] == fallback_url
+    assert len(observations) == 12

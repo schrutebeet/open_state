@@ -35,17 +35,23 @@ class SepeRegisteredUnemploymentConnector(HtmlExcelConnector):
     def fetch(self, dataset: DatasetDefinition, context: ConnectorContext) -> DatasetPayload:
         try:
             return super().fetch(dataset, context)
-        except httpx.HTTPStatusError as listing_error:
+        except (httpx.HTTPStatusError, httpx.TransportError) as listing_error:
             fallback_url = dataset.config.get("fallback_url")
-            if (
-                not fallback_url
-                or listing_error.response.status_code not in HttpClient.RETRYABLE_STATUS_CODES
+            response = getattr(listing_error, "response", None)
+            status_code = response.status_code if response is not None else None
+            if not fallback_url or (
+                status_code is not None
+                and status_code not in HttpClient.RETRYABLE_STATUS_CODES
             ):
                 raise
 
+            if status_code is None:
+                reason = f"{type(listing_error).__name__}: {listing_error}"
+            else:
+                reason = f"HTTP {status_code}"
             LOGGER.warning(
-                "SEPE listing returned HTTP %s; trying the configured official workbook URL",
-                listing_error.response.status_code,
+                "SEPE listing unavailable (%s); trying the configured official workbook URL",
+                reason,
             )
             try:
                 response = context.http.get(str(fallback_url))
